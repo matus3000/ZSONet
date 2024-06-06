@@ -10,6 +10,10 @@
 #define PCI_VENDOR_ID_ZSONET 0x0250
 #define PCI_DEVICE_ID_ZSONET 0x250e
 
+MODULE_AUTHOR("Mateusz Bodziony <mb394086>");
+MODULE_DESCRIPTION("Zsonet Driver");
+MODULE_LICENSE("GPL");
+
 static const struct pci_device_id zsonet_pci_tbl[] = {
 	{PCI_VENDOR_ID_ZSONET, PCI_DEVICE_ID_ZSONET,
 	 PCI_ANY_ID, PCI_ANY_ID, 0, 0}

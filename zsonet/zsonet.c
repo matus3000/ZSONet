@@ -1,4 +1,4 @@
-#include "linux/netdevice.h"
+#include <linux/netdevice.h>
 #include <linux/mod_devicetable.h>
 #include <linux/etherdevice.h>
 #include <linux/pci.h>
@@ -37,7 +37,8 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
   if (!dev)
     return -ENOMEM;
 
-  pr_info("MB - zso_init_one ");
+  pr_err("MB - zso_init_one");
+  rc = -ENOMEM;
   goto err_free;
   
   return 0;

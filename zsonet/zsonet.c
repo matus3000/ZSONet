@@ -67,14 +67,14 @@ static const struct net_device_ops zsonet_netdev_ops = {
 	.ndo_stop = zsonet_close
 };
 
-/* static void */
-/* zsonet_set_mac(struct zsonet *zp) */
-/* { */
-/* 	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) { */
-/* 		zp->mac_addr[i] = readb(zp->regview + offset); */
-/* 		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]); */
-/* 	} */
-/* } */
+static void
+zsonet_set_mac(struct zsonet *zp)
+{
+	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) {
+		zp->mac_addr[i] = readb(zp->regview + offset);
+		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
+	}
+}
 
 static int
 zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
@@ -122,7 +122,7 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_unmap;
 	}
 
-	/* zsonet_set_mac(zp); */
+	zsonet_set_mac(zp);
 
 	return 0;
 	
@@ -161,6 +161,8 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pr_err("MB - z");
 	
 	pci_set_drvdata(pdev, dev);
+
+	rc = -ENOMEM;
 	goto error;
 	/* eth_hw_addr_set(dev, zp->mac_addr); */
 
@@ -171,12 +173,14 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
   
 	return 0;
 error:
+	pr_err("MB - zso_init_one - error");
 	pci_iounmap(pdev, zp->regview);
+	zp->regview = NULL;
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 err_free:
-  zsonet_free_stats_blk(dev);
-  free_netdev(dev);
+	zsonet_free_stats_blk(dev);
+	free_netdev(dev);
   return rc;
 }
 

@@ -4,11 +4,12 @@
 #include <linux/pci.h>
 #include <linux/module.h>
 #include <linux/printk.h>
-
+#include <asm/io.h>
 
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
 #define PCI_DEVICE_ID_ZSONET 0x250e
+#define REG_SIZE 256
 
 MODULE_AUTHOR("Mateusz Bodziony <mb394086>");
 MODULE_DESCRIPTION("Zsonet Driver");
@@ -20,35 +21,156 @@ static const struct pci_device_id zsonet_pci_tbl[] = {
 };
 
 struct zsonet {
-  int x;
-  int y;
+	void __iomem		*regview;
+	void			*buffer_blk[4];
+	dma_addr_t		buffer_blk_mapping[4];
+	u8			mac_addr[8];
+	int x;
+	int y;
+};
+
+static void zsonet_free_stats_blk(struct net_device *dev) {}
+
+/* static int zsonet_allocate_buffer_blk(struct net_device *dev) { */
+  
+/* }; */
+
+static int
+zsonet_open(struct net_device *dev)
+{
+	pr_info("Zsonet Open");
+	return 0;
+}
+
+static int
+zsonet_close(struct net_device *dev)
+{
+	struct zsonet *zp = netdev_priv(dev);
+
+	/* bnx2_disable_int_sync(bp); */
+	/* bnx2_napi_disable(bp); */
+	/* netif_tx_disable(dev); */
+	/* del_timer_sync(&bp->timer); */
+	/* zsonet_shutdown_chip(bp); */
+	/* bnx2_free_irq(bp); */
+	/* bnx2_free_skbs(bp); */
+	/* bnx2_free_mem(bp); */
+	/* bnx2_del_napi(bp); */
+	/* bp->link_up = 0; */
+	/* netif_carrier_off(bp->dev); */
+	return 0;
+}
+
+
+static const struct net_device_ops zsonet_netdev_ops = {
+	.ndo_open = zsonet_open,
+	.ndo_stop = zsonet_close
 };
 
 static void
-zsonet_free_stats_blk(struct net_device *dev)
+zsonet_set_mac(struct zsonet *zp)
 {
-  
+	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) {
+		zp->mac_addr[i] = readb(zp->regview + offset);
+		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
+	}
 }
+
+static int
+zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
+{
+	struct zsonet *zp;
+	int rc;
+	u32 reg;
+	u64 dma_mask;
+
+	SET_NETDEV_DEV(dev, &pdev->dev);
+	zp = netdev_priv(dev);
+
+	rc = pci_enable_device(pdev);
+	if (rc) {
+		dev_err(&pdev->dev, "Cannot enable PCI device, aborting\n");
+		goto err_out;
+	}
+	return 0;
+
+	rc = pci_request_io_regions(pdev, DRV_MODULE_NAME);
+	if (rc) {
+		dev_err(&pdev->dev, "Cannot obtain PCI resources, aborting\n");
+		goto err_out_disable;
+	}
+
+	if (!(pci_resource_flags(pdev, 0) & IORESOURCE_MEM)) {
+		dev_err(&pdev->dev,
+			"Cannot find PCI device base address, aborting\n");
+		rc = -ENODEV;
+		goto err_out_release;
+	}
+
+	pci_set_master(pdev);
+
+	zp->regview = pci_iomap(pdev, 0, REG_SIZE);
+	if (!zp->regview) {
+		dev_err(&pdev->dev, "Cannot map register space, aborting\n");
+		rc = -ENOMEM;
+		goto err_out_release;
+	}
+
+
+	if ((rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(16))) != 0) {
+		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
+		goto err_out_unmap;
+	}
+
+	zsonet_set_mac(zp);
+	
+err_out_unmap:
+	pci_iounmap(pdev, zp->regview);
+	zp->regview = NULL;
+err_out_release:
+	pci_release_regions(pdev);
+err_out_disable:
+	pci_disable_device(pdev);
+err_out:
+	return rc;
+}
+
+
+
 
 static int
 zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
-  struct net_device *dev;
-  struct zsonet *zp;
-  int rc;
+	struct net_device *dev;
+	struct zsonet *zp;
+	int rc;
 
-  dev = alloc_etherdev(sizeof(*zp));
-  if (!dev)
-    return -ENOMEM;
+	dev = alloc_etherdev(sizeof(*zp));
+	if (!dev)
+		return -ENOMEM;
 
-  pr_err("MB - zso_init_one");
-  rc = -ENOMEM;
-  goto err_free;
+	rc = zsonet_init_board(pdev, dev);
+	if (rc < 0)
+		goto err_free;
+
+	dev->netdev_ops = &zsonet_netdev_ops;
+	zp = netdev_priv(dev);
+
+	pci_set_drvdata(pdev, dev);
+	eth_hw_addr_set(dev, zp->mac_addr);
+
+	if ((rc = register_netdev(dev))) {
+		dev_err(&pdev->dev, "Cannot register net device\n");
+		goto error;
+	}
   
-  return 0;
-
+	return 0;
+error:
+	pci_iounmap(pdev, zp->regview);
+	pci_release_regions(pdev);
+	pci_disable_device(pdev);
 err_free:
-  zsonet_free_stats_blk(dev);
+  /* zsonet_free_stats_blk(dev); */
   free_netdev(dev);
   return rc;
 }
@@ -56,7 +178,25 @@ err_free:
 static void
 zso_remove_one(struct pci_dev *pdev)
 {
+	struct net_device *dev = pci_get_drvdata(pdev);
+	struct zsonet *zp = netdev_priv(dev);
 
+	unregister_netdev(dev);
+
+	/* del_timer_sync(&bp->timer); */
+	/* cancel_work_sync(&bp->reset_task); */
+
+	pci_iounmap(pdev, zp->regview);
+
+	/* bnx2_free_stats_blk(dev); */
+	/* kfree(bp->temp_stats_blk); */
+
+	/* bnx2_release_firmware(bp); */
+
+	free_netdev(dev);
+
+	pci_release_regions(pdev);
+	pci_disable_device(pdev);
 }
 
 static struct pci_driver zsonet_pci_driver = {

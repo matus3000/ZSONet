@@ -93,7 +93,6 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		dev_err(&pdev->dev, "Cannot enable PCI device, aborting\n");
 		goto err_out;
 	}
-	return 0;
 	
 	pr_err("MB - zsonet_init_board - request regions");
 	rc = pci_request_io_regions(pdev, DRV_MODULE_NAME);

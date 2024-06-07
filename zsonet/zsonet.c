@@ -1,3 +1,4 @@
+#include "linux/dma-mapping.h"
 #include <linux/netdevice.h>
 #include <linux/mod_devicetable.h>
 #include <linux/etherdevice.h>
@@ -121,8 +122,10 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	}
 
 
-	pr_err("MB - zsonet_init_board - dma_set_mask");
-	if ((rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(16))) != 0) {
+	pr_err("MB - zsonet_init_board - dma_set_mask 64");
+	if (dma_set_mask(&pdev->dev, DMA_BIT_MASK(64)) != 0) {
+		pr_err("MB - zsonet_init_board - dma_set_mask 32");
+	} else if ((rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(32))) != 0) {
 		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
 		goto err_out_unmap;
 	}

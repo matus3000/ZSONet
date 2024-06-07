@@ -123,6 +123,8 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	}
 
 	/* zsonet_set_mac(zp); */
+
+	return 0;
 	
 err_out_unmap:
 	pci_iounmap(pdev, zp->regview);

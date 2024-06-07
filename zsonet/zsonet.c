@@ -122,7 +122,7 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_unmap;
 	}
 
-	zsonet_set_mac(zp);
+	/* zsonet_set_mac(zp); */
 	
 err_out_unmap:
 	pci_iounmap(pdev, zp->regview);
@@ -156,13 +156,16 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	dev->netdev_ops = &zsonet_netdev_ops;
 	zp = netdev_priv(dev);
 
+	pr_err("MB - z");
+	
 	pci_set_drvdata(pdev, dev);
-	eth_hw_addr_set(dev, zp->mac_addr);
+	goto error;
+	/* eth_hw_addr_set(dev, zp->mac_addr); */
 
-	if ((rc = register_netdev(dev))) {
-		dev_err(&pdev->dev, "Cannot register net device\n");
-		goto error;
-	}
+	/* if ((rc = register_netdev(dev))) { */
+	/* 	dev_err(&pdev->dev, "Cannot register net device\n"); */
+	/* 	goto error; */
+	/* } */
   
 	return 0;
 error:

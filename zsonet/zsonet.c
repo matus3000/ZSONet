@@ -45,7 +45,7 @@ zsonet_open(struct net_device *dev)
 static int
 zsonet_close(struct net_device *dev)
 {
-	struct zsonet *zp = netdev_priv(dev);
+	/* struct zsonet *zp = netdev_priv(dev); */
 
 	/* bnx2_disable_int_sync(bp); */
 	/* bnx2_napi_disable(bp); */
@@ -81,8 +81,8 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 {
 	struct zsonet *zp;
 	int rc;
-	u32 reg;
-	u64 dma_mask;
+	/* u32 reg; */
+	/* u64 dma_mask; */
 
 	SET_NETDEV_DEV(dev, &pdev->dev);
 	zp = netdev_priv(dev);
@@ -170,7 +170,7 @@ error:
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 err_free:
-  /* zsonet_free_stats_blk(dev); */
+  zsonet_free_stats_blk(dev);
   free_netdev(dev);
   return rc;
 }

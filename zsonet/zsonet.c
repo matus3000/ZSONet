@@ -77,6 +77,21 @@ zsonet_set_mac(struct zsonet *zp)
 	}
 }
 
+static void ping_dma_mask(struct device *dev) {
+	if (dma_set_mask(dev, DMA_BIT_MASK(64)) == 0) {
+		pr_err("MB - zsonet_init_board - dma_set_mask 64 available");
+	}
+	if (dma_set_mask(dev, DMA_BIT_MASK(32)) == 0) {
+		pr_err("MB - zsonet_init_board - dma_set_mask 32 available");
+	}
+	if (dma_set_coherent_mask(dev, DMA_BIT_MASK(64)) == 0) {
+		pr_err("MB - zsonet_init_board - dma_set_coherent_mask 64 available");
+	}
+	if (dma_set_coherent_mask(dev, DMA_BIT_MASK(32)) == 0) {
+		pr_err("MB - zsonet_init_board - dma_set_coherent_mask 32 available");
+	}
+}
+
 static int
 zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 {
@@ -121,6 +136,8 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_release;
 	}
 
+
+	ping_dma_mask(&pdev->dev);
 
 	pr_err("MB - zsonet_init_board - dma_set_mask 64");
 	if (dma_set_mask(&pdev->dev, DMA_BIT_MASK(64)) != 0) {

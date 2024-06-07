@@ -86,20 +86,23 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 
 	SET_NETDEV_DEV(dev, &pdev->dev);
 	zp = netdev_priv(dev);
-
+	
+	pr_err("MB - zsonet_init_board - enable_device");
 	rc = pci_enable_device(pdev);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot enable PCI device, aborting\n");
 		goto err_out;
 	}
 	return 0;
-
+	
+	pr_err("MB - zsonet_init_board - request regions");
 	rc = pci_request_io_regions(pdev, DRV_MODULE_NAME);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot obtain PCI resources, aborting\n");
 		goto err_out_disable;
 	}
-
+	
+	pr_err("MB - zsonet_init_board - resource flags");
 	if (!(pci_resource_flags(pdev, 0) & IORESOURCE_MEM)) {
 		dev_err(&pdev->dev,
 			"Cannot find PCI device base address, aborting\n");
@@ -107,8 +110,10 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_release;
 	}
 
+	pr_err("MB - zsonet_init_board - set master");
 	pci_set_master(pdev);
-
+	
+	pr_err("MB - zsonet_init_board - iomap");
 	zp->regview = pci_iomap(pdev, 0, REG_SIZE);
 	if (!zp->regview) {
 		dev_err(&pdev->dev, "Cannot map register space, aborting\n");
@@ -117,21 +122,26 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	}
 
 
+	pr_err("MB - zsonet_init_board - dma_set_mask");
 	if ((rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(16))) != 0) {
 		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
 		goto err_out_unmap;
 	}
 
+	pr_err("MB - zsonet_init_board - zsonet_set_mac");
 	zsonet_set_mac(zp);
 
 	return 0;
 	
 err_out_unmap:
+	pr_err("MB - zsonet_init_board - unmap");
 	pci_iounmap(pdev, zp->regview);
 	zp->regview = NULL;
 err_out_release:
+	pr_err("MB - zsonet_init_board - release_regions");
 	pci_release_regions(pdev);
 err_out_disable:
+	pr_err("MB - zsonet_init_board - disable_device");
 	pci_disable_device(pdev);
 err_out:
 	return rc;
@@ -176,7 +186,9 @@ error:
 	pr_err("MB - zso_init_one - error");
 	pci_iounmap(pdev, zp->regview);
 	zp->regview = NULL;
+	pr_err("MB - zso_init_one - release");
 	pci_release_regions(pdev);
+	pr_err("MB - zso_init_one - disable");
 	pci_disable_device(pdev);
 err_free:
 	zsonet_free_stats_blk(dev);
@@ -195,16 +207,20 @@ zso_remove_one(struct pci_dev *pdev)
 	/* del_timer_sync(&bp->timer); */
 	/* cancel_work_sync(&bp->reset_task); */
 
+	pr_err("MB - zso_remove_one - iounmap");
 	pci_iounmap(pdev, zp->regview);
 
 	/* bnx2_free_stats_blk(dev); */
 	/* kfree(bp->temp_stats_blk); */
 
 	/* bnx2_release_firmware(bp); */
-
+	
+	pr_err("MB - zso_remove_one - free_net_dev");
 	free_netdev(dev);
 
+	pr_err("MB - zso_remove_one - release");
 	pci_release_regions(pdev);
+	pr_err("MB - zso_remove_one - disable");
 	pci_disable_device(pdev);
 }
 

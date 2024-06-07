@@ -67,14 +67,14 @@ static const struct net_device_ops zsonet_netdev_ops = {
 	.ndo_stop = zsonet_close
 };
 
-static void
-zsonet_set_mac(struct zsonet *zp)
-{
-	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) {
-		zp->mac_addr[i] = readb(zp->regview + offset);
-		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
-	}
-}
+/* static void */
+/* zsonet_set_mac(struct zsonet *zp) */
+/* { */
+/* 	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) { */
+/* 		zp->mac_addr[i] = readb(zp->regview + offset); */
+/* 		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]); */
+/* 	} */
+/* } */
 
 static int
 zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)

@@ -239,27 +239,34 @@ zsonet_open(struct net_device *dev)
 	int rc;
 	struct zsonet *zp = netdev_priv(dev);
 
-
+	pr_err("MB - zsonet_open - netif_carrier_off");
 	netif_carrier_off(dev);
 
+	pr_err("MB - zsonet_open - zsonet_init_napi");
 	zsonet_init_napi(zp);
+	pr_err("MB - zsonet_open - zsonet_napi_enable");
 	zsonet_napi_enable(zp);
-	
+
+	pr_err("MB - zsonet_open - zsonet_alloc_mem");
 	rc = zsonet_alloc_mem(zp);
 	if (rc)
 		goto open_err;
 
+	pr_err("MB - zsonet_open - zsonet_request_irq");
 	rc = zsonet_request_irq(zp);
 	if (rc)
 		goto open_err;
 
+	pr_err("MB - zsonet_open - zsonet_prepare_device");
 	zsonet_prepare_device(zp);
-
+	pr_err("MB - zsonet_open - netif_start_queue");
 	netif_start_queue(dev);
 	
 	return 0;
 open_err:
+	pr_err("MB - zsonet_open - zsonet_free_irq");
 	zsonet_free_irq(zp);
+	pr_err("MB - zsonet_open - zsonet_free_mem");
 	zsonet_free_mem(zp);
 	return rc;
 }
@@ -274,12 +281,14 @@ zsonet_close(struct net_device *dev)
 	/* netif_tx_disable(dev); */
 	/* del_timer_sync(&bp->timer); */
 	/* zsonet_shutdown_chip(bp); */
+	pr_err("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
 	/* bnx2_free_skbs(bp); */
+	pr_err("MB - zsonet_close - zsonet_free_mem");
 	zsonet_free_mem(zp);
 	/* bnx2_del_napi(bp); */
 	/* bp->link_up = 0; */
-	/* netif_carrier_off(bp->dev); */
+	netif_carrier_off(zp->dev);
 	return 0;
 }
 

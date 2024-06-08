@@ -1,6 +1,5 @@
 #include "linux/interrupt.h"
 #include "linux/irqreturn.h"
-#include "linux/stddef.h"
 #include "linux/types.h"
 #include <linux/dma-mapping.h>
 #include <linux/gfp_types.h>
@@ -12,6 +11,8 @@
 #include <linux/printk.h>
 #include <asm/io.h>
 
+#include "zsonet.h"
+
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
 #define PCI_DEVICE_ID_ZSONET 0x250e
@@ -19,9 +20,13 @@
 
 #define MIN_ETHERNET_PACKET_SIZE	(ETH_ZLEN - ETH_HLEN)
 #define MAX_ETHERNET_PACKET_SIZE	ETH_DATA_LEN
-#define MAX_ETHERNET_JUMBO_PACKET_SIZE	9000
-#define BUFF_SIZE 2048
+#define MAX_ETHERNET_JUMBO_PACKET_SIZE 9000
+#define RX_BUFF_SIZE (1 << 15)
+#define TX_BUFF_SIZE (1 << 15)
 
+#define ZSONET_RDL(zp, offset) readl(zp->regview + offset)
+#define ZSONET_WRL(zp, offset, val) writel(val, zp->regview + offset)
+#define ZSONET_WRW(zp, offset, val) writew(val, zp->regview + offset)
 
 MODULE_AUTHOR("Mateusz Bodziony <mb394086>");
 MODULE_DESCRIPTION("Zsonet Driver");
@@ -53,6 +58,29 @@ struct zsonet {
 	int x;
 	int y;
 };
+
+static void zsonet_setup_buffers(struct zsonet *zp) {
+	unsigned int dev_addr;
+	unsigned short buff_size;
+	
+	for (int i = 0, offset = ZSONET_REG_TX_BUF_0; i < 4; ++i, offset += 4) {
+		unsigned int val = *(unsigned int*) &zp->buffer_blk_mapping[i];
+		ZSONET_WRL(zp, offset, val);
+		ZSONET_WRW(zp, ZSONET_REG_TX_STATUS_0 + i * 4 + 2, TX_BUFF_SIZE);
+	}
+	dev_addr = *(unsigned int*) &zp->rx_buffer_mapping;
+	ZSONET_WRL(zp, ZSONET_REG_RX_BUF, dev_addr);
+	ZSONET_WRW(zp, ZSONET_REG_RX_BUF_SIZE, RX_BUFF_SIZE);
+}
+
+static void
+zsonet_prepare_device(struct zsonet *zp)
+{
+	zsonet_setup_buffers(zp);
+	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
+	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_RX_OK | ZSONET_INTR_TX_OK);
+	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 1);
+}
 
 static void zsonet_free_stats_blk(struct net_device *dev) {}
 
@@ -104,7 +132,7 @@ zsonet_allocate_tx_buffer_blk(struct zsonet *zp) {
 	for (int  i = 0; i < 4; ++i) {
 		pr_info("MB - zsonet_allocate_tx_buffer_blk - allocation rx num %d", i);
 		
-		zp->buffer_blk[i] = dma_alloc_coherent(&zp->pdev->dev, BUFF_SIZE,
+		zp->buffer_blk[i] = dma_alloc_coherent(&zp->pdev->dev, TX_BUFF_SIZE,
 						       &zp->buffer_blk_mapping[i], GFP_KERNEL);
 
 		if (!zp->buffer_blk[i])
@@ -120,7 +148,7 @@ zsonet_free_tx_buffer_blk(struct zsonet *zp) {
 		if (zp->buffer_blk[i]){
 			pr_info("MB - zsonet_free_tx_buffer - %d", i);
 			
-			dma_free_coherent(&zp->pdev->dev, BUFF_SIZE,
+			dma_free_coherent(&zp->pdev->dev, TX_BUFF_SIZE,
 					  zp->buffer_blk[i], zp->buffer_blk_mapping[i]);
 			zp->buffer_blk[i] = NULL;
 		}
@@ -131,7 +159,7 @@ static int
 zsonet_allocate_rx_buffer_blk(struct zsonet *zp)
 {
 	pr_info("MB - zsonet_allocate_rx_buffer - allocation rx num");
-	zp->rx_buffer = dma_alloc_coherent(&zp->pdev->dev, BUFF_SIZE, &zp->rx_buffer_mapping, GFP_KERNEL);
+	zp->rx_buffer = dma_alloc_coherent(&zp->pdev->dev, RX_BUFF_SIZE, &zp->rx_buffer_mapping, GFP_KERNEL);
 	if (!zp->rx_buffer)
 		return -ENOMEM;
 	
@@ -143,7 +171,7 @@ zsonet_free_rx_buffer(struct zsonet *zp) {
 	if (zp->rx_buffer) {
 		pr_info("MB - zsonet_free_rx_buffer");
 			
-		dma_free_coherent(&zp->pdev->dev, BUFF_SIZE,
+		dma_free_coherent(&zp->pdev->dev, RX_BUFF_SIZE,
 				  zp->rx_buffer, zp->rx_buffer_mapping);
 		zp->rx_buffer = NULL;
 	}
@@ -225,59 +253,15 @@ zsonet_open(struct net_device *dev)
 	if (rc)
 		goto open_err;
 
-	/* rc = bnx2_init_nic(bp, 1); */
-	/* if (rc) */
-	/* 	goto open_err; */
+	zsonet_prepare_device(zp);
 
-	/* mod_timer(&bp->timer, jiffies + bp->current_interval); */
-
-	/* atomic_set(&bp->intr_sem, 0); */
-
-	/* memset(bp->temp_stats_blk, 0, sizeof(struct statistics_block)); */
-
-	/* bnx2_enable_int(bp); */
-
-	/* if (bp->flags & BNX2_FLAG_USING_MSI) { */
-	/* 	/\* Test MSI to make sure it is working */
-	/* 	 * If MSI test fails, go back to INTx mode */
-	/* 	 *\/ */
-	/* 	if (bnx2_test_intr(bp) != 0) { */
-	/* 		netdev_warn(bp->dev, "No interrupt was generated using MSI, switching to INTx mode. Please report this failure to the PCI maintainer and include system chipset information.\n"); */
-
-	/* 		bnx2_disable_int(bp); */
-	/* 		bnx2_free_irq(bp); */
-
-	/* 		bnx2_setup_int_mode(bp, 1); */
-
-	/* 		rc = bnx2_init_nic(bp, 0); */
-
-	/* 		if (!rc) */
-	/* 			rc = bnx2_request_irq(bp); */
-
-	/* 		if (rc) { */
-	/* 			del_timer_sync(&bp->timer); */
-	/* 			goto open_err; */
-	/* 		} */
-	/* 		bnx2_enable_int(bp); */
-	/* 	} */
-	/* } */
-	/* if (bp->flags & BNX2_FLAG_USING_MSI) */
-	/* 	netdev_info(dev, "using MSI\n"); */
-	/* else if (bp->flags & BNX2_FLAG_USING_MSIX) */
-	/* 	netdev_info(dev, "using MSIX\n"); */
-
-	netif_tx_start_all_queues(dev);
-out:
-	return rc;
-
+	netif_start_queue(dev);
+	
+	return 0;
 open_err:
-	/* bnx2_napi_disable(bp); */
-	/* bnx2_free_skbs(bp); */
 	zsonet_free_irq(zp);
 	zsonet_free_mem(zp);
-	/* bnx2_del_napi(bp); */
-	/* bnx2_release_firmware(bp); */
-	goto out;
+	return rc;
 }
 
 static int
@@ -308,7 +292,7 @@ static const struct net_device_ops zsonet_netdev_ops = {
 static void
 zsonet_set_mac(struct zsonet *zp)
 {
-	for (int i = 0, offset = 0; i < 6; ++i, offset += sizeof(u8)) {
+	for (int i = 0, offset = ZSONET_REG_MAC_0; i < 6; ++i, offset += sizeof(u8)) {
 		zp->mac_addr[i] = readb(zp->regview + offset);
 		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
 	}

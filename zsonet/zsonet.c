@@ -13,12 +13,10 @@
 #include <asm/io.h>
 
 #include "zsonet.h"
-#include "asm-generic/int-ll64.h"
+
 #include "linux/byteorder/generic.h"
 #include <linux/spinlock.h>
-#include "linux/if_ether.h"
-#include "linux/spinlock_types.h"
-#include "linux/u64_stats_sync.h"
+#include <linux/u64_stats_sync.h>
 
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
@@ -185,19 +183,19 @@ static int zsonet_read_one(struct zsonet *zp) {
 
 static int zsonet_rx_poll(struct zsonet *zp, int budget)
 {
-  int work_done = 0;
-  int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
+	int work_done = 0;
+	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
 
-  if (!budget) return 0;
+	if (!budget) return 0;
   
-  while (zp->rx_buffer_position != write_position) {
-    work_done += zsonet_read_one(zp);
-    if (work_done ==  budget)
-      break;
-  }
+	while (zp->rx_buffer_position != write_position) {
+		work_done += zsonet_read_one(zp);
+		if (work_done ==  budget)
+			break;
+	}
 
-  ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
-  return work_done;
+	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
+	return work_done;
 }
 
 
@@ -205,14 +203,13 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	unsigned int offset;
 	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
 
-	/// TO DO SYNCHRONISATION
-	
 	u32 tx_finshed = ZSONET_RDL(zp, offset);
 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED && zp->buffer_blk_in_use[i])
 	{
 		zp->tx_stats.packets += 1;
 		zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 		zp->buffer_blk_in_use[i] = 0;
+		ZSONET_WRW(zp, offset, 0);
 	}
 }
 
@@ -221,46 +218,29 @@ zsonet_interrupt(int irq, void *dev_instance)
 {
 	pr_info("MB - zsonet_interrupt");
 	struct zsonet *zp;
-	unsigned int read_position;
-	struct sk_buff *skb;
+	zp = dev_instance;
+	unsigned int status;
 
+	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 
+	if  (status & ZSONET_INTR_TX_OK) {
+		pr_info("MB - zsonet_interrupt - spin_lock_irq ");
+		spin_lock_irq(&zp->lock);
+		for (int i = 0; i < 4; ++i) {
+			zsonet_tx_finish(zp, i);
+		}
+		if (!zp->buffer_blk_in_use[zp->buffer_blk_position] && netif_queue_stopped(zp->dev))
+			netif_wake_queue(zp->dev);
+		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_TX_OK);
+		spin_unlock_irq(&zp->lock);
+		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
+	}
+
+	if (status & ZSONET_INTR_RX_OK) {
+		
+	}
 	
 	return IRQ_HANDLED;
-	/* struct bnx2_napi *bnapi = dev_instance; */
-	/* struct bnx2 *bp = bnapi->bp; */
-	/* struct status_block *sblk = bnapi->status_blk.msi; */
-
-	/* /\* When using INTx, it is possible for the interrupt to arrive */
-	/*  * at the CPU before the status block posted prior to the */
-	/*  * interrupt. Reading a register will flush the status block. */
-	/*  * When using MSI, the MSI message will always complete after */
-	/*  * the status block write. */
-	/*  *\/ */
-	/* if ((sblk->status_idx == bnapi->last_status_idx) && */
-	/*     (BNX2_RD(bp, BNX2_PCICFG_MISC_STATUS) & */
-	/*      BNX2_PCICFG_MISC_STATUS_INTA_VALUE)) */
-	/* 	return IRQ_NONE; */
-
-	/* BNX2_WR(bp, BNX2_PCICFG_INT_ACK_CMD, */
-	/* 	BNX2_PCICFG_INT_ACK_CMD_USE_INT_HC_PARAM | */
-	/* 	BNX2_PCICFG_INT_ACK_CMD_MASK_INT); */
-
-	/* /\* Read back to deassert IRQ immediately to avoid too many */
-	/*  * spurious interrupts. */
-	/*  *\/ */
-	/* BNX2_RD(bp, BNX2_PCICFG_INT_ACK_CMD); */
-
-	/* /\* Return here if interrupt is shared and is disabled. *\/ */
-	/* if (unlikely(atomic_read(&bp->intr_sem) != 0)) */
-	/* 	return IRQ_HANDLED; */
-
-	/* if (napi_schedule_prep(&bnapi->napi)) { */
-	/* 	bnapi->last_status_idx = sblk->status_idx; */
-	/* 	__napi_schedule(&bnapi->napi); */
-	/* } */
-
-	/* return IRQ_HANDLED; */
 }
 
 
@@ -485,7 +465,6 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_unlock_irq(&zp->lock);
 
 	if (!tx_buf) {
-
 		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
 		return NETDEV_TX_BUSY;
 	}

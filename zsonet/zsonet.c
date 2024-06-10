@@ -11,12 +11,14 @@
 #include <linux/module.h>
 #include <linux/printk.h>
 #include <asm/io.h>
-#include <string.h>
 
 #include "zsonet.h"
 #include "asm-generic/int-ll64.h"
 #include "linux/byteorder/generic.h"
-#include "linux/slab.h"
+#include <linux/spinlock.h>
+#include "linux/if_ether.h"
+#include "linux/spinlock_types.h"
+#include "linux/u64_stats_sync.h"
 
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
@@ -47,6 +49,15 @@ struct zsonet_napi {
 	struct zsonet           *zp;
 };
 
+struct zsonet_stats {
+	u64 packets;
+	u64 bytes;
+	u64 dropped;
+	struct u64_stats_sync  usc;
+};
+
+
+
 struct zsonet {
 	void __iomem		*regview;
 
@@ -56,7 +67,7 @@ struct zsonet {
 	void			*buffer_blk[4];
 	dma_addr_t		buffer_blk_mapping[4];
 	struct sk_buff          *buffer_blk_sk_buff[4];
-	u8                      buffer_blk_in_use[4];
+	u16                     buffer_blk_in_use[4];
 	u8                      buffer_blk_position;
 	
         void                    *rx_buffer;
@@ -66,8 +77,11 @@ struct zsonet {
 	u8			mac_addr[8];
 	u8                      irq_requested;
 	struct zsonet_napi      zsonet_napi;
-	int x;
-	int y;
+	struct zsonet_stats     rx_stats;
+	struct zsonet_stats     tx_stats;
+
+	spinlock_t              lock;
+	spinlock_t              rx_lock;
 };
 
 static void zsonet_setup_buffers(struct zsonet *zp) {
@@ -190,9 +204,14 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	unsigned int offset;
 	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
+
+	/// TO DO SYNCHRONISATION
+	
 	u32 tx_finshed = ZSONET_RDL(zp, offset);
-	if (tx_finshed | ZSONET_TX_STATUS_TX_FINISHED)
+	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED && zp->buffer_blk_in_use[i])
 	{
+		zp->tx_stats.packets += 1;
+		zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 		zp->buffer_blk_in_use[i] = 0;
 	}
 }
@@ -205,16 +224,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	unsigned int read_position;
 	struct sk_buff *skb;
 
-	//*Receive frame *//
-	read_position = zp->rx_buffer_position;
-	if (true) {
-	  u32 rx_status = ZSONET_RDL(zp, ZSONET_REG_RX_STATUS);
-	  for (int i = 0; i < 1; ++i) {
-		  skb = zsonet_read_one_without_lock(zp);
-		  skb->protocol = eth_type_trans (skb, zp->dev);
-		  netif_rx(skb);
-	  }
-	}
+
 	
 	return IRQ_HANDLED;
 	/* struct bnx2_napi *bnapi = dev_instance; */
@@ -254,6 +264,20 @@ zsonet_interrupt(int irq, void *dev_instance)
 }
 
 
+
+static void
+zsonet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+{
+	struct zsonet *zp = netdev_priv(dev);
+
+
+	netdev_stats_to_stats64(stats, &dev->stats);
+
+	stats->rx_bytes = zp->rx_stats.bytes;
+	stats->rx_packets = zp->rx_stats.packets;
+	stats->tx_packets = zp->tx_stats.packets;
+	stats->tx_bytes = zp->tx_stats.bytes;
+}
 
 static int
 zsonet_allocate_tx_buffer_blk(struct zsonet *zp) {
@@ -419,47 +443,71 @@ zsonet_close(struct net_device *dev)
 	return 0;
 }
 
+#define TX_STATUS_I(zp, i) ZSONET_RDL(zp, (ZSONET_REG_TX_STATUS_0 + (i*4)))
+
+static inline void update_tx_stats(unsigned int size) {
+  
+}
+
 static netdev_tx_t
 zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	pr_err("MB - zsonet_start_xmit");
 	struct zsonet       *zp;
 	/* struct netdev_queue *txq; */
-	void *               tx_buf;
+	void *               tx_buf = NULL;
 	int pos;
 	unsigned int         len;
 	unsigned int         offset;
-	unsigned short       short_len;
 	
         zp = netdev_priv(dev);
 	pos = zp->buffer_blk_position;
-	tx_buf = zp->buffer_blk[pos];
 	len = skb->len;
-	offset = ZSONET_REG_TX_STATUS_0 + pos * 4 + 2;
-	
-	if (likely(len < TX_BUFF_SIZE)) {
-		if (len < MIN_ETHERNET_PACKET_SIZE) {
-			pr_err("MB - zsonet_start_smit - packet smaller than ethernet");
+	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
+
+	if (unlikely(len > TX_BUFF_SIZE)) {
+		zp->tx_stats.dropped += 1;
+		pr_err("MB - zsonet_start_xmit - drop of packet because of exceeding length");
+		goto free_skb;
+	}	
+
+	spin_lock_irq(&zp->lock);
+	if (zp->buffer_blk_in_use[pos]) {
+		if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) {
+			update_tx_stats(zp->buffer_blk_in_use[pos]);
+			zp->buffer_blk_in_use[pos] = 0;
+			tx_buf = zp->buffer_blk[pos];
+		} else {
+			pr_err("MB - zsonet_start_xmit - stopping_queue");
+			netif_tx_stop_all_queues(dev);
 		}
-		skb_copy_and_csum_dev(skb, tx_buf);
-		dev_kfree_skb_any(skb);
-	} else {
-		pr_err("MB - zsonet_start_xmit - drop of packet");
 	}
+	spin_unlock_irq(&zp->lock);
 
+	if (!tx_buf) {
 
+		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
+		return NETDEV_TX_BUSY;
+	}
+	
+	pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
+	if (len < MIN_ETHERNET_PACKET_SIZE) {
+		memset(tx_buf, 0, ETH_ZLEN);
+		pr_err("MB - zsonet_start_smit - packet smaller than ethernet");
+		
+	}
+	skb_copy_and_csum_dev(skb, tx_buf);
 	wmb();
-
-	short_len = *(unsigned short*)&len;
-	ZSONET_WRW(zp, offset, short_len);
 	
-	/* Synchronizacja TO DO */
-	zp->buffer_blk_position = pos + 1;
-	/* Synchronizacja TO DO */
+	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
+	spin_lock_irq(&zp->lock);
+	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
+	ZSONET_WRL(zp, offset, (len << 16));
+	spin_unlock_irq(&zp->lock);
 
-	
-
-	
+free_skb:
+	pr_err("MB - zsonet_start_xmit - kfree");
+	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
 
@@ -468,7 +516,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 static const struct net_device_ops zsonet_netdev_ops = {
 	.ndo_open = zsonet_open,
 	.ndo_stop = zsonet_close,
-	.ndo_start_xmit = zsonet_start_xmit
+	.ndo_start_xmit = zsonet_start_xmit,
+	.ndo_get_stats64 = zsonet_get_stats64
 };
 
 static void
@@ -606,6 +655,8 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	dev->min_mtu = MIN_ETHERNET_PACKET_SIZE;
 	dev->max_mtu = MAX_ETHERNET_JUMBO_PACKET_SIZE;
 
+	spin_lock_init(&zp->lock);
+	spin_lock_init(&zp->rx_lock);
 	
 	if ((rc = register_netdev(dev))) {
 		dev_err(&pdev->dev, "Cannot register net device\n");

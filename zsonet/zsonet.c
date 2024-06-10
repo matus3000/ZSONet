@@ -140,8 +140,52 @@ static struct sk_buff *zsonet_read_one_without_lock(struct zsonet *zp)
 		zp->rx_buffer_position -= RX_BUFF_SIZE;
 
 	skb_put(skb, data_len);
+	skb->protocol = eth_type_trans(skb, zp->dev);
+	
 	return skb;
 }
+
+static int zsonet_read_one(struct zsonet *zp) {
+
+	unsigned int pos, data_len;
+	struct sk_buff *skb;
+
+	pos = zp->rx_buffer_position;
+	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE));
+
+	if (data_len > RX_BUFF_SIZE)
+		return 0;
+	
+	skb = netdev_alloc_skb(zp->dev, data_len);
+	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
+	zp->rx_buffer_position += data_len;
+	if (zp->rx_buffer_position >= RX_BUFF_SIZE)
+		zp->rx_buffer_position -= RX_BUFF_SIZE;
+
+	skb_put(skb, data_len);
+	skb->protocol = eth_type_trans(skb, zp->dev);
+	netif_rx(skb);
+
+	return 1;
+}
+
+static int zsonet_rx_poll(struct zsonet *zp, int budget)
+{
+  int work_done = 0;
+  int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
+
+  if (!budget) return 0;
+  
+  while (zp->rx_buffer_position != write_position) {
+    work_done += zsonet_read_one(zp);
+    if (work_done ==  budget)
+      break;
+  }
+
+  ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
+  return work_done;
+}
+
 
 static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	unsigned int offset;

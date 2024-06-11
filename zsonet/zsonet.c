@@ -61,7 +61,7 @@ struct zsonet {
 	dma_addr_t		buffer_blk_mapping[4];
 	struct sk_buff          *buffer_blk_sk_buff[4];
 	u16                     buffer_blk_in_use[4];
-	u8                      buffer_blk_position;
+	u8                      tx_buffer_index;
 	
         void                    *rx_buffer;
 	dma_addr_t              rx_buffer_mapping;
@@ -281,7 +281,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 		for (int i = 0; i < 4; ++i) {
 			zsonet_tx_finish(zp, i);
 		}
-		if (!zp->buffer_blk_in_use[zp->buffer_blk_position] && netif_queue_stopped(zp->dev)) 
+		if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev)) 
 			netif_wake_queue(zp->dev);
 		status = status & ~ZSONET_INTR_TX_OK;
 		pr_info("MB - zsonet_interrupt - spin_lock_irq - Status %d", status);
@@ -517,7 +517,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	spin_lock_irq(&zp->tx_lock);
 
-	pos = zp->buffer_blk_position;
+	pos = zp->tx_buffer_index;
 	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
 	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
 	
@@ -531,12 +531,12 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			netif_tx_stop_all_queues(dev);
 		}
 	} else  {
-	  tx_buf = zp->buffer_blk[pos];
+		tx_buf = zp->buffer_blk[pos];
 	}
 
 	if (tx_buf) {
-		zp->rx_buffer_position += 1;
-		if (zp->rx_buffer_position == 4) zp->rx_buffer_position = 0;
+		zp->tx_buffer_index += 1;
+		if (zp->tx_buffer_index == 4) zp->rx_buffer_position = 0;
 	}
 	spin_unlock_irq(&zp->tx_lock);
 

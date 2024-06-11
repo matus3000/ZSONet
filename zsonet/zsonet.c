@@ -256,22 +256,25 @@ zsonet_interrupt(int irq, void *dev_instance)
 	
 	zp = netdev_priv(dev);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
-
+	pr_info("MB - zsonet_interrupt - Status %d", status);
+	
 	if  (status & ZSONET_INTR_TX_OK) {
 		pr_info("MB - zsonet_interrupt - spin_lock_irq ");
 		spin_lock(&zp->tx_lock);
 		for (int i = 0; i < 4; ++i) {
 			zsonet_tx_finish(zp, i);
 		}
-		if (!zp->buffer_blk_in_use[zp->buffer_blk_position] && netif_queue_stopped(zp->dev))
+		if (!zp->buffer_blk_in_use[zp->buffer_blk_position] && netif_queue_stopped(zp->dev)) 
 			netif_wake_queue(zp->dev);
 		status = status & ~ZSONET_INTR_TX_OK;
+		pr_info("MB - zsonet_interrupt - spin_lock_irq - Status %d", status);
 		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status);
 		spin_unlock(&zp->tx_lock);
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
 	if (status & ZSONET_INTR_RX_OK) {
+	        pr_info("MB - zsonet_interrupt - rx_lock ");
 		spin_lock_irq(&zp->lock);
 		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK);
 		if (napi_schedule_prep(&zp->napi)) {

@@ -93,8 +93,22 @@ static void zsonet_setup_buffers(struct zsonet *zp) {
 }
 
 static void
+zsonet_stop_device(struct zsonet *zp)
+{
+	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 0);
+	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0);
+}
+
+static void
 zsonet_prepare_device(struct zsonet *zp)
 {
+	u32 mask = 0, enabled = 0;
+	if ((mask = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) || (enabled = ZSONET_RDL(zp, ZSONET_REG_ENABLED))){
+		pr_err("MB - zsonet_prepare_device - was not turned off mask=%d, enabled = %d", mask, enabled);
+		zsonet_stop_device(zp);
+		wmb();
+	}
+  
 	pr_err("MB - zsonet_prepare_device");
 	zsonet_setup_buffers(zp);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);

@@ -13,6 +13,7 @@
 #include <asm/io.h>
 
 #include "zsonet.h"
+#include "net/net_debug.h"
 
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
@@ -248,7 +249,7 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 static irqreturn_t
 zsonet_interrupt(int irq, void *dev_instance)
 {
-	pr_info("MB - zsonet_interrupt");
+        pr_err("MB - zsonet_interrupt");
 	struct zsonet *zp;
 	struct net_device *dev = dev_instance;
 	unsigned int status;
@@ -433,7 +434,8 @@ zsonet_open(struct net_device *dev)
 	zsonet_prepare_device(zp);
 	pr_err("MB - zsonet_open - netif_start_queue");
 	netif_start_queue(dev);
-	
+
+	pr_err("MB - zsonet_open - open");
 	return 0;
 open_err:
 	pr_err("MB - zsonet_open - zsonet_free_irq");

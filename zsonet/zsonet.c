@@ -259,7 +259,7 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 		zp->tx_stats.packets += 1;
 		zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 		zp->buffer_blk_in_use[i] = 0;
-		ZSONET_WRW(zp, offset, 0);
+		ZSONET_WRL(zp, offset, 0);
 	}
 }
 
@@ -509,6 +509,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	pos = zp->buffer_blk_position;
 	len = skb->len;
 	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
+	pr_err("MB - zsonet_start_xmit - tx_pos %d", pos);
 
 	if (unlikely(len > TX_BUFF_SIZE)) {
 		zp->tx_stats.dropped += 1;
@@ -529,6 +530,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	} else  {
 	  tx_buf = zp->buffer_blk[pos];
 	}
+	zp->rx_buffer_position += 1;
+	if (zp->rx_buffer_position == 4) zp->rx_buffer_position = 0;
 	spin_unlock_irq(&zp->tx_lock);
 
 	if (!tx_buf) {

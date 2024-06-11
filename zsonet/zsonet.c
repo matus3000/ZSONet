@@ -506,10 +506,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	unsigned int         offset;
 	
         zp = netdev_priv(dev);
-	pos = zp->buffer_blk_position;
 	len = skb->len;
-	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
-	pr_err("MB - zsonet_start_xmit - tx_pos %d", pos);
+	
 
 	if (unlikely(len > TX_BUFF_SIZE)) {
 		zp->tx_stats.dropped += 1;
@@ -518,6 +516,11 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}	
 
 	spin_lock_irq(&zp->tx_lock);
+
+	pos = zp->buffer_blk_position;
+	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
+	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
+	
 	if (zp->buffer_blk_in_use[pos]) {
 		if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) {
 			update_tx_stats(zp->buffer_blk_in_use[pos]);
@@ -530,8 +533,11 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	} else  {
 	  tx_buf = zp->buffer_blk[pos];
 	}
-	zp->rx_buffer_position += 1;
-	if (zp->rx_buffer_position == 4) zp->rx_buffer_position = 0;
+
+	if (tx_buf) {
+		zp->rx_buffer_position += 1;
+		if (zp->rx_buffer_position == 4) zp->rx_buffer_position = 0;
+	}
 	spin_unlock_irq(&zp->tx_lock);
 
 	if (!tx_buf) {
@@ -551,9 +557,9 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_lock_irq(&zp->tx_lock);
 	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
 	wmb();	
-	
 	ZSONET_WRL(zp, offset, (len << 16));
 	spin_unlock_irq(&zp->tx_lock);
+	
 free_skb:
 	pr_err("MB - zsonet_start_xmit - kfree");
 	dev_kfree_skb_any(skb);

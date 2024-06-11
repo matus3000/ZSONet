@@ -237,8 +237,11 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
 
 	u32 tx_finshed = ZSONET_RDL(zp, offset);
+	pr_err("MB - zsonet_tx_finish - tx_finished = %d", tx_finshed);
+	
 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED && zp->buffer_blk_in_use[i])
-	{
+	  {
+	        pr_err("MB - zsonet_tx_finish - finished job for tx_num: %d", i);
 		zp->tx_stats.packets += 1;
 		zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 		zp->buffer_blk_in_use[i] = 0;

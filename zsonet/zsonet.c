@@ -15,6 +15,7 @@
 #include "zsonet.h"
 
 #include "linux/byteorder/generic.h"
+#include "linux/container_of.h"
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
 
@@ -40,11 +41,6 @@ MODULE_LICENSE("GPL");
 static const struct pci_device_id zsonet_pci_tbl[] = {
 	{PCI_VENDOR_ID_ZSONET, PCI_DEVICE_ID_ZSONET,
 	 PCI_ANY_ID, PCI_ANY_ID, 0, 0}
-};
-
-struct zsonet_napi {
-	struct napi_struct	napi		____cacheline_aligned;
-	struct zsonet           *zp;
 };
 
 struct zsonet_stats {
@@ -74,15 +70,18 @@ struct zsonet {
 	
 	u8			mac_addr[8];
 	u8                      irq_requested;
-	struct zsonet_napi      zsonet_napi;
+	struct napi_struct	napi;
+	
 	struct zsonet_stats     rx_stats;
 	struct zsonet_stats     tx_stats;
 
 	spinlock_t              lock;
 	spinlock_t              rx_lock;
+	spinlock_t              tx_lock;
 };
 
 static void zsonet_setup_buffers(struct zsonet *zp) {
+	pr_err("MB - zsonet_setup_buffers");
 	unsigned int dev_addr;
 	
 	for (int i = 0, offset = ZSONET_REG_TX_BUF_0; i < 4; ++i, offset += 4) {
@@ -97,17 +96,17 @@ static void zsonet_setup_buffers(struct zsonet *zp) {
 static void
 zsonet_prepare_device(struct zsonet *zp)
 {
+	pr_err("MB - zsonet_prepare_device");
 	zsonet_setup_buffers(zp);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_RX_OK | ZSONET_INTR_TX_OK);
 	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 1);
 }
 
-static void zsonet_free_stats_blk(struct net_device *dev) {}
-
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
                                              unsigned int len)
 {
+	pr_err("MB - readl_from_cyclic_buffer");
 	unsigned int result = 0;
 	if (len - offset >= 4) {
 		result = *(unsigned int *) (buff + offset);
@@ -116,7 +115,7 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 		memcpy(&result, buff+offset, left);
 		memcpy(&result + left, buff, 4 - left);
 	}
-
+	pr_err("MB - readl_from_cyclic_buffer - result %d", result);
 	return result;
 }
 
@@ -124,38 +123,41 @@ static void read_from_cyclic_buffer(void *dest, const void *buff,
                                     unsigned int offset, unsigned int len,
                                     unsigned int size)
 {
-	int left = len - offset;
-	
-	if (left >= size) {
 
+	int left = len - offset;
+	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
+	if (left >= size) {
+		memcpy(dest, buff, size);
 	} else {
 		memcpy(dest, buff+offset, left);
 		memcpy(dest + left, buff, size - left);
 	}
 }
 
-static struct sk_buff *zsonet_read_one_without_lock(struct zsonet *zp)
-{
-	unsigned int pos, data_len;
-	struct sk_buff *skb;
-
-	pos = zp->rx_buffer_position;
-	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE));
-
-	if (data_len > RX_BUFF_SIZE)
-		return NULL;
+/* static struct sk_buff *zsonet_read_one_without_lock(struct zsonet *zp) */
+/* { */
+/* 	unsigned int pos, data_len; */
+/* 	struct sk_buff *skb; */
 	
-	skb = netdev_alloc_skb(zp->dev, data_len);
-	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
-	zp->rx_buffer_position += data_len;
-	if (zp->rx_buffer_position >= RX_BUFF_SIZE)
-		zp->rx_buffer_position -= RX_BUFF_SIZE;
-
-	skb_put(skb, data_len);
-	skb->protocol = eth_type_trans(skb, zp->dev);
+/* 	pos = zp->rx_buffer_position; */
+/* 	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE)); */
+/* 	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len); */
 	
-	return skb;
-}
+/* 	if (data_len > RX_BUFF_SIZE) { */
+/* 		return NULL; */
+/* 	} */
+
+/* 	skb = netdev_alloc_skb(zp->dev, data_len); */
+/* 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len); */
+/* 	zp->rx_buffer_position += data_len; */
+/* 	if (zp->rx_buffer_position >= RX_BUFF_SIZE) */
+/* 		zp->rx_buffer_position -= RX_BUFF_SIZE; */
+
+/* 	skb_put(skb, data_len); */
+/* 	skb->protocol = eth_type_trans(skb, zp->dev); */
+	
+/* 	return skb; */
+/* } */
 
 static int zsonet_read_one(struct zsonet *zp) {
 
@@ -164,11 +166,19 @@ static int zsonet_read_one(struct zsonet *zp) {
 
 	pos = zp->rx_buffer_position;
 	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE));
+	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len);
 
-	if (data_len > RX_BUFF_SIZE)
+	if (data_len > RX_BUFF_SIZE) {
+		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size", data_len);
 		return 0;
+	}
 	
 	skb = netdev_alloc_skb(zp->dev, data_len);
+	if (!skb) {
+		pr_err("MB - zsonet_read_one_without_lock - netdev_alloc_skb failed");
+		/// packet dropped
+		return 0;
+	}
 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
 	zp->rx_buffer_position += data_len;
 	if (zp->rx_buffer_position >= RX_BUFF_SIZE)
@@ -176,6 +186,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
+	pr_err("MB - zsonet_read_one_without_lock - netif_rx");
 	netif_rx(skb);
 
 	return 1;
@@ -185,17 +196,40 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 {
 	int work_done = 0;
 	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
-
+	pr_err("MB - zsonet_rx_poll - budget %d", budget);
+	
 	if (!budget) return 0;
-  
+
+	spin_lock(&zp->rx_lock);
 	while (zp->rx_buffer_position != write_position) {
 		work_done += zsonet_read_one(zp);
-		if (work_done ==  budget)
+		if (work_done == budget)
 			break;
 	}
 
+	pr_err("MB - zsonet_rx_poll - work_ddone %d", work_done);
+
+	if (work_done < budget) {
+	  unsigned long flags;
+	  spin_lock_irqsave(&zp->lock, flags);
+	  if (napi_complete_done(&zp->napi, work_done)) {
+		  ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
+	  }
+	  spin_unlock_irqrestore(&zp->lock, flags);
+	}
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
+	spin_unlock(&zp->rx_lock);
+
 	return work_done;
+}
+
+static int zsonet_poll(struct napi_struct *napi, int budget) {
+	struct zsonet *zp = container_of(napi, struct zsonet, napi);
+	int res = 0;
+
+	res = zsonet_rx_poll(zp, budget);
+	// TO DO - co zrobić z utraconymi ramkami//
+	return res;
 }
 
 
@@ -218,26 +252,34 @@ zsonet_interrupt(int irq, void *dev_instance)
 {
 	pr_info("MB - zsonet_interrupt");
 	struct zsonet *zp;
-	zp = dev_instance;
+	struct net_device *dev = dev_instance;
 	unsigned int status;
-
+	
+	zp = netdev_priv(dev);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 
 	if  (status & ZSONET_INTR_TX_OK) {
 		pr_info("MB - zsonet_interrupt - spin_lock_irq ");
-		spin_lock_irq(&zp->lock);
+		spin_lock(&zp->tx_lock);
 		for (int i = 0; i < 4; ++i) {
 			zsonet_tx_finish(zp, i);
 		}
 		if (!zp->buffer_blk_in_use[zp->buffer_blk_position] && netif_queue_stopped(zp->dev))
 			netif_wake_queue(zp->dev);
-		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_TX_OK);
-		spin_unlock_irq(&zp->lock);
+		status = status & ~ZSONET_INTR_TX_OK;
+		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status);
+		spin_unlock(&zp->tx_lock);
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
 	if (status & ZSONET_INTR_RX_OK) {
-		
+		spin_lock_irq(&zp->lock);
+		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK);
+		if (napi_schedule_prep(&zp->napi)) {
+			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
+			__napi_schedule(&zp->napi);
+		}
+		spin_unlock_irq(&zp->lock);
 	}
 	
 	return IRQ_HANDLED;
@@ -348,7 +390,7 @@ zsonet_request_irq(struct zsonet *zp)
 
 	pr_info("MB - zsonet_request_irq - dev_name %s - irq %d", zp->dev->name, irq);
 	
-	rc = request_irq(irq, zsonet_interrupt, flags, zp->dev->name, &zp);
+	rc = request_irq(irq, zsonet_interrupt, flags, zp->dev->name, zp->dev);
 	if (!rc)
 		zp->irq_requested = 1;
 	return rc;
@@ -359,7 +401,7 @@ zsonet_free_irq(struct zsonet *zp)
 {
 	if (zp->irq_requested) {
 		pr_info("MB - zsonet_free_irq");
-		free_irq(zp->pdev->irq, &zp->zsonet_napi);
+		free_irq(zp->pdev->irq, zp->dev);
 	}
 }
 
@@ -451,7 +493,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto free_skb;
 	}	
 
-	spin_lock_irq(&zp->lock);
+	spin_lock_irq(&zp->tx_lock);
 	if (zp->buffer_blk_in_use[pos]) {
 		if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) {
 			update_tx_stats(zp->buffer_blk_in_use[pos]);
@@ -462,7 +504,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			netif_tx_stop_all_queues(dev);
 		}
 	}
-	spin_unlock_irq(&zp->lock);
+	spin_unlock_irq(&zp->tx_lock);
 
 	if (!tx_buf) {
 		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
@@ -476,14 +518,14 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		
 	}
 	skb_copy_and_csum_dev(skb, tx_buf);
-	wmb();
-	
-	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
-	spin_lock_irq(&zp->lock);
-	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
-	ZSONET_WRL(zp, offset, (len << 16));
-	spin_unlock_irq(&zp->lock);
 
+	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
+	spin_lock_irq(&zp->tx_lock);
+	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
+	wmb();	
+	
+	ZSONET_WRL(zp, offset, (len << 16));
+	spin_unlock_irq(&zp->tx_lock);
 free_skb:
 	pr_err("MB - zsonet_start_xmit - kfree");
 	dev_kfree_skb_any(skb);
@@ -617,6 +659,7 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_free;
 
 	dev->netdev_ops = &zsonet_netdev_ops;
+	netif_napi_add(dev, &zp->napi, zsonet_poll);
 	zp = netdev_priv(dev);
 
 	pci_set_drvdata(pdev, dev);
@@ -666,16 +709,8 @@ zso_remove_one(struct pci_dev *pdev)
 
 	unregister_netdev(dev);
 
-	/* del_timer_sync(&bp->timer); */
-	/* cancel_work_sync(&bp->reset_task); */
-
 	pr_err("MB - zso_remove_one - iounmap");
 	pci_iounmap(pdev, zp->regview);
-
-	/* bnx2_free_stats_blk(dev); */
-	/* kfree(bp->temp_stats_blk); */
-
-	/* bnx2_release_firmware(bp); */
 	
 	pr_err("MB - zso_remove_one - free_net_dev");
 	free_netdev(dev);

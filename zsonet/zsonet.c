@@ -262,9 +262,9 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 			zp->tx_stats.packets += 1;
 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 			zp->buffer_blk_in_use[i] = 0;
-			ZSONET_WRL(zp, offset, 0);
+			/* ZSONET_WRL(zp, offset, 0); */
 		} else {
-			ZSONET_WRL(zp, offset, 0);
+			/* ZSONET_WRL(zp, offset, 0); */
 			pr_err("MB - zsonet_tx_finish - empty_bulk: %d", i);
 		}
 	}

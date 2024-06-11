@@ -1,4 +1,4 @@
-#include <linux/interrupt.h>
+include# <linux/interrupt.h>
 #include <linux/irqreturn.h>
 #include <linux/skbuff.h>
 #include <linux/types.h>
@@ -623,6 +623,7 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	pr_err("MB - zsonet_init_board - zsonet_set_mac");
 	zsonet_set_mac(zp);
 
+	pr_err("MB - zsonet_init_board - return 0");
 	return 0;
 	
 err_out_unmap:
@@ -650,17 +651,18 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	int rc;
 
 	dev = alloc_etherdev(sizeof(*zp));
+	zp = netdev_priv(dev);
 	if (!dev)
 		return -ENOMEM;
-
+	
 	rc = zsonet_init_board(pdev, dev);
 	if (rc < 0)
 		goto err_free;
 
 	dev->netdev_ops = &zsonet_netdev_ops;
 	netif_napi_add(dev, &zp->napi, zsonet_poll);
-	zp = netdev_priv(dev);
 
+	pr_err("MB - zso_init_one - pci_set_drvdata\n");
 	pci_set_drvdata(pdev, dev);
 
 	pr_err("MB - zso_init_one - eth_hw_adddr_set\n");
@@ -675,10 +677,13 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	
 	dev->min_mtu = MIN_ETHERNET_PACKET_SIZE;
 	dev->max_mtu = MAX_ETHERNET_JUMBO_PACKET_SIZE;
-
+	
+	pr_err("MB - zso_init_one - spin_lock_init\n");
 	spin_lock_init(&zp->lock);
 	spin_lock_init(&zp->rx_lock);
-	
+	spin_lock_init(&zp->tx_lock);
+
+	pr_err("MB - zso_init_one - register_netdev\n");
 	if ((rc = register_netdev(dev))) {
 		dev_err(&pdev->dev, "Cannot register net device\n");
 		goto error;

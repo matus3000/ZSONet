@@ -541,14 +541,14 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
 	
 	if (zp->buffer_blk_in_use[pos]) {
-		if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) {
-			update_tx_stats(zp->buffer_blk_in_use[pos]);
-			zp->buffer_blk_in_use[pos] = 0;
-			tx_buf = zp->buffer_blk[pos];
-		} else {
+		/* if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) { */
+		/* 	update_tx_stats(zp->buffer_blk_in_use[pos]); */
+		/* 	zp->buffer_blk_in_use[pos] = 0; */
+		/* 	tx_buf = zp->buffer_blk[pos]; */
+		/* } else { */
 			pr_err("MB - zsonet_start_xmit - stopping_queue");
 			netif_tx_stop_all_queues(dev);
-		}
+		/* } */
 	} else  {
 		tx_buf = zp->buffer_blk[pos];
 	}
@@ -754,7 +754,7 @@ error:
 	pr_err("MB - zso_init_one - disable");
 	pci_disable_device(pdev);
 err_free:
-	/* zsonet_free_stats_blk(dev); */
+	/* zsonet_free_statts_blk(dev); */
 	free_netdev(dev);
   return rc;
 }

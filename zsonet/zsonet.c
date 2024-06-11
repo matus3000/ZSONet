@@ -536,7 +536,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	if (tx_buf) {
 		zp->tx_buffer_index += 1;
-		if (zp->tx_buffer_index == 4) zp->rx_buffer_position = 0;
+		if (zp->tx_buffer_index == 4) zp->tx_buffer_index = 0;
 	}
 	spin_unlock_irq(&zp->tx_lock);
 

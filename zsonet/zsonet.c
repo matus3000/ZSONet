@@ -14,8 +14,6 @@
 
 #include "zsonet.h"
 
-#include "linux/byteorder/generic.h"
-#include "linux/container_of.h"
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
 

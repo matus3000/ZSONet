@@ -251,8 +251,8 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
 
 	u32 tx_finshed = ZSONET_RDL(zp, offset);
-	pr_err("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d", tx_finshed,
-	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED);
+	pr_err("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed,
+	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i);
 	
 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED)
 	{

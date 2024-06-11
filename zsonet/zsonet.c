@@ -167,7 +167,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
-		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size", data_len);
+		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size");
 		return 0;
 	}
 	
@@ -352,6 +352,7 @@ zsonet_free_rx_buffer(struct zsonet *zp) {
 static void
 zsonet_free_mem(struct zsonet *zp) {
 	zsonet_free_tx_buffer_blk(zp);
+	zsonet_free_rx_buffer(zp);
 }
 
 
@@ -694,7 +695,7 @@ error:
 	pr_err("MB - zso_init_one - disable");
 	pci_disable_device(pdev);
 err_free:
-	zsonet_free_stats_blk(dev);
+	/* zsonet_free_stats_blk(dev); */
 	free_netdev(dev);
   return rc;
 }

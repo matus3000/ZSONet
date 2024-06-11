@@ -432,8 +432,8 @@ zsonet_open(struct net_device *dev)
 
 	pr_err("MB - zsonet_open - zsonet_prepare_device");
 	zsonet_prepare_device(zp);
-	pr_err("MB - zsonet_open - netif_start_queue");
-	netif_start_queue(dev);
+	pr_err("MB - zsonet_open - netif_carrier_on");
+	netif_carrier_on(dev);
 
 	pr_err("MB - zsonet_open - open");
 	return 0;

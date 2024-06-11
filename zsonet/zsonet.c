@@ -435,6 +435,8 @@ zsonet_open(struct net_device *dev)
 	pr_err("MB - zsonet_open - netif_carrier_on");
 	netif_carrier_on(dev);
 
+	netif_start_queue(dev);
+
 	pr_err("MB - zsonet_open - open");
 	return 0;
 open_err:
@@ -504,6 +506,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			pr_err("MB - zsonet_start_xmit - stopping_queue");
 			netif_tx_stop_all_queues(dev);
 		}
+	} else  {
+	  tx_buf = zp->buffer_blk[pos];
 	}
 	spin_unlock_irq(&zp->tx_lock);
 

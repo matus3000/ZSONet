@@ -513,10 +513,10 @@ zsonet_free_irq(struct zsonet *zp)
 	}
 }
 
-
 static int
 zsonet_open(struct net_device *dev)
 {
+	return  0;
 	int rc;
 	struct zsonet *zp = netdev_priv(dev);
 
@@ -558,6 +558,7 @@ open_err:
 static int
 zsonet_close(struct net_device *dev)
 {
+	return 0;
 	struct zsonet *zp = netdev_priv(dev);
 
 	pr_err("MB - zsonet_close - netif_carrier_of");
@@ -667,7 +668,6 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 /* 	dev_kfree_skb_any(skb); */
 	return NETDEV_TX_OK;
 }
-
 
 
 static const struct net_device_ops zsonet_netdev_ops = {
@@ -847,7 +847,8 @@ zso_remove_one(struct pci_dev *pdev)
 {
 	struct net_device *dev = pci_get_drvdata(pdev);
 	struct zsonet *zp = netdev_priv(dev);
-
+	
+	pr_err("MB - zso_remove_one - unregister");
 	unregister_netdev(dev);
 
 	pr_err("MB - zso_remove_one - iounmap");

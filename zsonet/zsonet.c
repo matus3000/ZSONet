@@ -323,7 +323,10 @@ zsonet_interrupt(int irq, void *dev_instance)
 	spin_lock_irq(&zp->lock);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 	wmb(); rmb();
+	if (!(mask & ZSONET_INTR_TX_OK))
+		pr_err("MB - zsonet_interrupt - turning TX interrupt off");
 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, mask);
+
 	spin_unlock_irq(&zp->lock);
 	
 	return IRQ_HANDLED;
@@ -646,6 +649,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		spin_lock_irq(&zp->lock);
 		u32 x;
 		if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) {
+			pr_err("MB - zsonet_start_xmit - returning TX mask");
 			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_REG_INTR_MASK);
 		}
 		spin_unlock_irq(&zp->lock);

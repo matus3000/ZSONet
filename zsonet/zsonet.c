@@ -249,30 +249,30 @@ static int zsonet_poll(struct napi_struct *napi, int budget) {
 }
 
 
-/* static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) { */
-/* 	unsigned int offset; */
-/* 	offset = ZSONET_REG_TX_STATUS_0 + i * 4; */
+static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
+	unsigned int offset;
+	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
 
-/* 	u32 tx_finshed = ZSONET_RDL(zp, offset); */
-/* 	pr_err("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed, */
-/* 	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i); */
+	u32 tx_finshed = ZSONET_RDL(zp, offset);
+	pr_info("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed,
+	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i);
 	
-/* 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED) */
-/* 	{ */
-/* 		if (zp->buffer_blk_in_use[i]) */
-/* 		{ */
-/* 			pr_err("MB - zsonet_tx_finish - finished job for tx_num: %d", i); */
-/* 			zp->tx_stats.packets += 1; */
-/* 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i]; */
-/* 			zp->buffer_blk_in_use[i] = 0; */
-/* 			zp->pending_writes--; */
-/* 			/\* ZSONET_WRL(zp, offset, 0); *\/ */
-/* 		} else { */
-/* 			/\* ZSONET_WRL(zp, offset, 0); *\/ */
-/* 			pr_err("MB - zsonet_tx_finish - empty_bulk: %d", i); */
-/* 		} */
-/* 	} */
-/* } */
+	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED)
+	{
+		if (zp->buffer_blk_in_use[i])
+		{
+			pr_info("MB - zsonet_tx_finish - finished job for tx_num: %d", i);
+			zp->tx_stats.packets += 1;
+			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
+			zp->buffer_blk_in_use[i] = 0;
+			zp->pending_writes--;
+			/* ZSONET_WRL(zp, offset, 0); */
+		} else {
+			/* ZSONET_WRL(zp, offset, 0); */
+			pr_info("MB - zsonet_tx_finish - empty_bulk: %d", i);
+		}
+	}
+}
 
 static int msg_counter = 0;
 
@@ -298,27 +298,28 @@ zsonet_interrupt(int irq, void *dev_instance)
 	spin_lock(&zp->lock);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 	wmb(); rmb();
-	/* ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0); */
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
+	pr_err("MB - zsonet_interrupt status = %d, new_status = %d", status,
+	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS));
 	spin_unlock(&zp->lock);
 	
-	/* pr_info("MB - zsonet_interrupt - Status %d", status); */
-	/* if  (status & ZSONET_INTR_TX_OK) { */
-	/* 	pr_info("MB - zsonet_interrupt - TX - spin_lock_irq"); */
-	/* 	spin_lock(&zp->tx_lock); */
-	/* 	for (int i = 0; i < 4; ++i) { */
-	/* 		zsonet_tx_finish(zp, i); */
-	/* 	} */
-	/* 	if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev)) */
-	/* 		netif_wake_queue(zp->dev); */
-	/* 	/\* status = status & ~ZSONET_INTR_TX_OK; *\/ */
-	/* 	/\* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); *\/ */
-	/* 	/\* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); *\/ */
-	/* 	if (zp->pending_writes == 0) */
-	/* 		mask = 0; */
-	/* 	spin_unlock(&zp->tx_lock); */
-	/* 	pr_info("MB - zsonet_interrupt - spin_unlock_irq "); */
-	/* } */
+	pr_info("MB - zsonet_interrupt - Status %d", status);
+	if  (status & ZSONET_INTR_TX_OK) {
+		pr_info("MB - zsonet_interrupt - TX - spin_lock_irq");
+		spin_lock(&zp->tx_lock);
+		for (int i = 0; i < 4; ++i) {
+			zsonet_tx_finish(zp, i);
+		}
+		if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev))
+			netif_wake_queue(zp->dev);
+		/* status = status & ~ZSONET_INTR_TX_OK; */
+		/* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); */
+		/* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); */
+		if (zp->pending_writes == 0)
+			mask = 0;
+		spin_unlock(&zp->tx_lock);
+		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
+	}
 
 	/* if (status & ZSONET_INTR_RX_OK) { */
 	/*         pr_info("MB - zsonet_interrupt - rx_lock "); */

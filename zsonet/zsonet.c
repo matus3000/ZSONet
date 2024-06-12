@@ -650,7 +650,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		u32 x;
 		if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) {
 			pr_err("MB - zsonet_start_xmit - returning TX mask");
-			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_REG_INTR_MASK);
+			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_INTR_TX_OK);
 		}
 		spin_unlock_irq(&zp->lock);
 	}

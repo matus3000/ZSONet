@@ -291,7 +291,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	struct zsonet *zp;
 	struct net_device *dev = dev_instance;
 	unsigned int status;
-	unsigned int mask = ZSONET_INTR_TX_OK;
+	/* unsigned int mask = ZSONET_INTR_TX_OK; */
 	
 	zp = netdev_priv(dev);
 

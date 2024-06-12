@@ -875,7 +875,7 @@ static struct pci_driver zsonet_pci_driver = {
   .name = DRV_MODULE_NAME,
   .id_table = zsonet_pci_tbl,
   .probe = zso_init_one,
-  .shutdown = zso_remove_one
+  .remove = zso_remove_one
 };
 
 module_pci_driver(zsonet_pci_driver);

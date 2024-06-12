@@ -516,7 +516,6 @@ zsonet_free_irq(struct zsonet *zp)
 static int
 zsonet_open(struct net_device *dev)
 {
-	return  0;
 	int rc;
 	struct zsonet *zp = netdev_priv(dev);
 
@@ -558,23 +557,14 @@ open_err:
 static int
 zsonet_close(struct net_device *dev)
 {
-	return 0;
 	struct zsonet *zp = netdev_priv(dev);
 
 	pr_err("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
-	/* bnx2_disable_int_sync(bp); */
-	/* bnx2_napi_disable(bp); */
-	/* netif_tx_disable(dev); */
-	/* del_timer_sync(&bp->timer); */
-	/* zsonet_shutdown_chip(bp); */
 	pr_err("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
-	/* bnx2_free_skbs(bp); */
 	pr_err("MB - zsonet_close - zsonet_free_mem");
 	zsonet_free_mem(zp);
-	/* bnx2_del_napi(bp); */
-	/* bp->link_up = 0; */
 
 	return 0;
 }

@@ -845,20 +845,28 @@ err_free:
 static void
 zso_remove_one(struct pci_dev *pdev)
 {
+	pr_err("MB - zso_remove_one - get_drvdata");
 	struct net_device *dev = pci_get_drvdata(pdev);
+	if (dev == 0) {
+		pr_err("MB - zso_remove_one - drvdata is NULL");
+	} else {
+		pr_err("MB - zso_remove_one - dev %p dereference", dev);
+	}
 	struct zsonet *zp = netdev_priv(dev);
-	
+
 	pr_err("MB - zso_remove_one - unregister");
 	unregister_netdev(dev);
+	
 
 	pr_err("MB - zso_remove_one - iounmap");
 	pci_iounmap(pdev, zp->regview);
-	
+
 	pr_err("MB - zso_remove_one - free_net_dev");
 	free_netdev(dev);
 
 	pr_err("MB - zso_remove_one - release");
 	pci_release_regions(pdev);
+
 	pr_err("MB - zso_remove_one - disable");
 	pci_disable_device(pdev);
 }

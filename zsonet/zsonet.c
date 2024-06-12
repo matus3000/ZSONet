@@ -274,8 +274,6 @@ static int zsonet_poll(struct napi_struct *napi, int budget) {
 /* 	} */
 /* } */
 
-static int msg_counter = 0;
-
 static irqreturn_t
 zsonet_interrupt(int irq, void *dev_instance)
 {

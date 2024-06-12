@@ -274,6 +274,8 @@ static int zsonet_poll(struct napi_struct *napi, int budget) {
 /* 	} */
 /* } */
 
+static int msg_counter = 0;
+
 static irqreturn_t
 zsonet_interrupt(int irq, void *dev_instance)
 {
@@ -281,7 +283,11 @@ zsonet_interrupt(int irq, void *dev_instance)
 		pr_err("MB - irq is not for this device irq %d", irq);
 		return IRQ_NONE;
 	}
-        pr_err("MB - zsonet_interrupt");
+	if (msg_counter < 4) {
+		msg_counter++;
+		pr_err("MB - zsonet_interrupt");
+	}
+
 	/* struct zsonet *zp; */
 	/* struct net_device *dev = dev_instance; */
 	/* unsigned int status; */

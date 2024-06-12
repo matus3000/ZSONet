@@ -272,65 +272,70 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	}
 }
 
-static irqreturn_t
-zsonet_interrupt(int irq, void *dev_instance)
+static irqreturn_t zsonet_interrupt(int irq, void *dev_instance)
 {
-        pr_err("MB - zsonet_interrupt");
-	struct zsonet *zp;
-	struct net_device *dev = dev_instance;
-	unsigned int status;
-	unsigned int mask = ZSONET_INTR_TX_OK;
-	
-	zp = netdev_priv(dev);
-
-	spin_lock_irq(&zp->lock);
-	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
-	wmb(); rmb();
-	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0);
-	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
-	spin_unlock_irq(&zp->lock);
-	
-	pr_info("MB - zsonet_interrupt - Status %d", status);
-	if  (status & ZSONET_INTR_TX_OK) {
-		pr_info("MB - zsonet_interrupt - TX - spin_lock_irq");
-		spin_lock(&zp->tx_lock);
-		for (int i = 0; i < 4; ++i) {
-			zsonet_tx_finish(zp, i);
-		}
-		if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev)) 
-			netif_wake_queue(zp->dev);
-		/* status = status & ~ZSONET_INTR_TX_OK; */
-		/* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); */
-		/* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); */
-		if (zp->pending_writes == 0)
-			mask = 0;
-		spin_unlock(&zp->tx_lock);
-		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
-	}
-
-	if (status & ZSONET_INTR_RX_OK) {
-	        pr_info("MB - zsonet_interrupt - rx_lock ");
-		spin_lock(&zp->lock);
-		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK);
-		if (napi_schedule_prep(&zp->napi)) {
-			__napi_schedule(&zp->napi);
-		} else {
-			mask |= ZSONET_INTR_RX_OK;
-		}		
-		spin_unlock(&zp->lock);
-	}
-
-	spin_lock(&zp->lock);
-	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
-	wmb(); rmb();
-	if (!(mask & ZSONET_INTR_TX_OK))
-		pr_err("MB - zsonet_interrupt - turning TX interrupt off");
-	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, mask);
-
-	spin_unlock(&zp->lock);
-	
 	return IRQ_HANDLED;
 }
+
+/* static irqreturn_t */
+/* zsonet_interrupt(int irq, void *dev_instance) */
+/* { */
+/*         pr_err("MB - zsonet_interrupt"); */
+/* 	struct zsonet *zp; */
+/* 	struct net_device *dev = dev_instance; */
+/* 	unsigned int status; */
+/* 	unsigned int mask = ZSONET_INTR_TX_OK; */
+	
+/* 	zp = netdev_priv(dev); */
+
+/* 	spin_lock_irq(&zp->lock); */
+/* 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
+/* 	wmb(); rmb(); */
+/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0); */
+/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0); */
+/* 	spin_unlock_irq(&zp->lock); */
+	
+/* 	pr_info("MB - zsonet_interrupt - Status %d", status); */
+/* 	if  (status & ZSONET_INTR_TX_OK) { */
+/* 		pr_info("MB - zsonet_interrupt - TX - spin_lock_irq"); */
+/* 		spin_lock(&zp->tx_lock); */
+/* 		for (int i = 0; i < 4; ++i) { */
+/* 			zsonet_tx_finish(zp, i); */
+/* 		} */
+/* 		if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev))  */
+/* 			netif_wake_queue(zp->dev); */
+/* 		/\* status = status & ~ZSONET_INTR_TX_OK; *\/ */
+/* 		/\* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); *\/ */
+/* 		/\* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); *\/ */
+/* 		if (zp->pending_writes == 0) */
+/* 			mask = 0; */
+/* 		spin_unlock(&zp->tx_lock); */
+/* 		pr_info("MB - zsonet_interrupt - spin_unlock_irq "); */
+/* 	} */
+
+/* 	if (status & ZSONET_INTR_RX_OK) { */
+/* 	        pr_info("MB - zsonet_interrupt - rx_lock "); */
+/* 		spin_lock(&zp->lock); */
+/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK); */
+/* 		if (napi_schedule_prep(&zp->napi)) { */
+/* 			__napi_schedule(&zp->napi); */
+/* 		} else { */
+/* 			mask |= ZSONET_INTR_RX_OK; */
+/* 		}		 */
+/* 		spin_unlock(&zp->lock); */
+/* 	} */
+
+/* 	spin_lock(&zp->lock); */
+/* 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
+/* 	wmb(); rmb(); */
+/* 	if (!(mask & ZSONET_INTR_TX_OK)) */
+/* 		pr_err("MB - zsonet_interrupt - turning TX interrupt off"); */
+/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, mask); */
+
+/* 	spin_unlock(&zp->lock); */
+	
+/* 	return IRQ_HANDLED; */
+/* } */
 
 /* static irqreturn_t */
 /* zsonet_interrupt(int irq, void *dev_instance) */
@@ -555,6 +560,7 @@ zsonet_close(struct net_device *dev)
 {
 	struct zsonet *zp = netdev_priv(dev);
 
+	netif_carrier_off(dev);
 	/* bnx2_disable_int_sync(bp); */
 	/* bnx2_napi_disable(bp); */
 	/* netif_tx_disable(dev); */
@@ -567,7 +573,7 @@ zsonet_close(struct net_device *dev)
 	zsonet_free_mem(zp);
 	/* bnx2_del_napi(bp); */
 	/* bp->link_up = 0; */
-	netif_carrier_off(zp->dev);
+
 	return 0;
 }
 
@@ -580,84 +586,84 @@ static inline void update_tx_stats(unsigned int size) {
 static netdev_tx_t
 zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	pr_err("MB - zsonet_start_xmit");
-	struct zsonet       *zp;
-	/* struct netdev_queue *txq; */
-	void *               tx_buf = NULL;
-	int pos;
-	unsigned int         len;
-	unsigned int         offset;
+/* 	pr_err("MB - zsonet_start_xmit"); */
+/* 	struct zsonet       *zp; */
+/* 	/\* struct netdev_queue *txq; *\/ */
+/* 	void *               tx_buf = NULL; */
+/* 	int pos; */
+/* 	unsigned int         len; */
+/* 	unsigned int         offset; */
 	
-        zp = netdev_priv(dev);
-	len = skb->len;
+/*         zp = netdev_priv(dev); */
+/* 	len = skb->len; */
 	
 
-	if (unlikely(len > TX_BUFF_SIZE)) {
-		zp->tx_stats.dropped += 1;
-		pr_err("MB - zsonet_start_xmit - drop of packet because of exceeding length");
-		goto free_skb;
-	}	
+/* 	if (unlikely(len > TX_BUFF_SIZE)) { */
+/* 		zp->tx_stats.dropped += 1; */
+/* 		pr_err("MB - zsonet_start_xmit - drop of packet because of exceeding length"); */
+/* 		goto free_skb; */
+/* 	}	 */
 
-	spin_lock_irq(&zp->tx_lock);
+/* 	spin_lock_irq(&zp->tx_lock); */
 
-	pos = zp->tx_buffer_index;
-	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
-	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
+/* 	pos = zp->tx_buffer_index; */
+/* 	offset = ZSONET_REG_TX_STATUS_0 + pos * 4; */
+/* 	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos); */
 	
-	if (zp->buffer_blk_in_use[pos]) {
-		/* if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) { */
-		/* 	update_tx_stats(zp->buffer_blk_in_use[pos]); */
-		/* 	zp->buffer_blk_in_use[pos] = 0; */
-		/* 	tx_buf = zp->buffer_blk[pos]; */
-		/* } else { */
-		pr_err("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos);
-			netif_tx_stop_all_queues(dev);
-		/* } */
-	} else  {
-		tx_buf = zp->buffer_blk[pos];
-	}
+/* 	if (zp->buffer_blk_in_use[pos]) { */
+/* 		/\* if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) { *\/ */
+/* 		/\* 	update_tx_stats(zp->buffer_blk_in_use[pos]); *\/ */
+/* 		/\* 	zp->buffer_blk_in_use[pos] = 0; *\/ */
+/* 		/\* 	tx_buf = zp->buffer_blk[pos]; *\/ */
+/* 		/\* } else { *\/ */
+/* 		pr_err("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos); */
+/* 			netif_tx_stop_all_queues(dev); */
+/* 		/\* } *\/ */
+/* 	} else  { */
+/* 		tx_buf = zp->buffer_blk[pos]; */
+/* 	} */
 
-	if (tx_buf) {
-		zp->tx_buffer_index += 1;
-		if (zp->tx_buffer_index >= 4) zp->tx_buffer_index = 0;
-	}
-	spin_unlock_irq(&zp->tx_lock);
+/* 	if (tx_buf) { */
+/* 		zp->tx_buffer_index += 1; */
+/* 		if (zp->tx_buffer_index >= 4) zp->tx_buffer_index = 0; */
+/* 	} */
+/* 	spin_unlock_irq(&zp->tx_lock); */
 
-	if (!tx_buf) {
-		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
-		return NETDEV_TX_BUSY;
-	}
+/* 	if (!tx_buf) { */
+/* 		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev "); */
+/* 		return NETDEV_TX_BUSY; */
+/* 	} */
 	
-	pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
-	if (len < MIN_ETHERNET_PACKET_SIZE) {
-		memset(tx_buf, 0, ETH_ZLEN);
-		pr_err("MB - zsonet_start_smit - packet smaller than ethernet");
+/* 	pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev "); */
+/* 	if (len < MIN_ETHERNET_PACKET_SIZE) { */
+/* 		memset(tx_buf, 0, ETH_ZLEN); */
+/* 		pr_err("MB - zsonet_start_smit - packet smaller than ethernet"); */
 		
-	}
-	skb_copy_and_csum_dev(skb, tx_buf);
+/* 	} */
+/* 	skb_copy_and_csum_dev(skb, tx_buf); */
 
-	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
-	spin_lock_irq(&zp->tx_lock);
-	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
-	zp->pending_writes++;
+/* 	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16); */
+/* 	spin_lock_irq(&zp->tx_lock); */
+/* 	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN); */
+/* 	zp->pending_writes++; */
 	
-	wmb();	
-	ZSONET_WRL(zp, offset, (len << 16));
-	spin_unlock_irq(&zp->tx_lock);
+/* 	wmb();	 */
+/* 	ZSONET_WRL(zp, offset, (len << 16)); */
+/* 	spin_unlock_irq(&zp->tx_lock); */
 
-	{
-		spin_lock_irq(&zp->lock);
-		u32 x;
-		if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) {
-			pr_err("MB - zsonet_start_xmit - returning TX mask");
-			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_INTR_TX_OK);
-		}
-		spin_unlock_irq(&zp->lock);
-	}
+/* 	{ */
+/* 		spin_lock_irq(&zp->lock); */
+/* 		u32 x; */
+/* 		if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) { */
+/* 			pr_err("MB - zsonet_start_xmit - returning TX mask"); */
+/* 			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_INTR_TX_OK); */
+/* 		} */
+/* 		spin_unlock_irq(&zp->lock); */
+/* 	} */
 	
-free_skb:
-	pr_err("MB - zsonet_start_xmit - kfree");
-	dev_kfree_skb_any(skb);
+/* free_skb: */
+/* 	pr_err("MB - zsonet_start_xmit - kfree"); */
+/* 	dev_kfree_skb_any(skb); */
 	return NETDEV_TX_OK;
 }
 

@@ -288,19 +288,19 @@ zsonet_interrupt(int irq, void *dev_instance)
 		pr_err("MB - zsonet_interrupt");
 	}
 
-	/* struct zsonet *zp; */
-	/* struct net_device *dev = dev_instance; */
-	/* unsigned int status; */
-	/* unsigned int mask = ZSONET_INTR_TX_OK; */
+	struct zsonet *zp;
+	struct net_device *dev = dev_instance;
+	unsigned int status;
+	unsigned int mask = ZSONET_INTR_TX_OK;
 	
-	/* zp = netdev_priv(dev); */
+	zp = netdev_priv(dev);
 
-	/* spin_lock_irq(&zp->lock); */
-	/* status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
-	/* wmb(); rmb(); */
+	spin_lock(&zp->lock);
+	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
+	wmb(); rmb();
 	/* ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0); */
-	/* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0); */
-	/* spin_unlock_irq(&zp->lock); */
+	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
+	spin_unlock(&zp->lock);
 	
 	/* pr_info("MB - zsonet_interrupt - Status %d", status); */
 	/* if  (status & ZSONET_INTR_TX_OK) { */

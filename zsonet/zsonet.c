@@ -610,7 +610,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		/* 	zp->buffer_blk_in_use[pos] = 0; */
 		/* 	tx_buf = zp->buffer_blk[pos]; */
 		/* } else { */
-			pr_err("MB - zsonet_start_xmit - stopping_queue");
+		pr_err("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos);
 			netif_tx_stop_all_queues(dev);
 		/* } */
 	} else  {

@@ -864,11 +864,11 @@ zsonet_remove_one(struct pci_dev *pdev)
 	pr_err("MB - zso_remove_one - free_net_dev");
 	free_netdev(dev);
 
-	pr_err("MB - zso_remove_one - release");
-	pci_release_regions(pdev);
-
 	pr_err("MB - zso_remove_one - disable");
 	pci_disable_device(pdev);
+	
+	pr_err("MB - zso_remove_one - release");
+	pci_release_regions(pdev);
 }
 
 static struct pci_driver zsonet_pci_driver = {

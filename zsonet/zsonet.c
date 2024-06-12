@@ -247,30 +247,30 @@ static int zsonet_poll(struct napi_struct *napi, int budget) {
 }
 
 
-static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
-	unsigned int offset;
-	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
+/* static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) { */
+/* 	unsigned int offset; */
+/* 	offset = ZSONET_REG_TX_STATUS_0 + i * 4; */
 
-	u32 tx_finshed = ZSONET_RDL(zp, offset);
-	pr_err("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed,
-	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i);
+/* 	u32 tx_finshed = ZSONET_RDL(zp, offset); */
+/* 	pr_err("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed, */
+/* 	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i); */
 	
-	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED)
-	{
-		if (zp->buffer_blk_in_use[i])
-		{
-			pr_err("MB - zsonet_tx_finish - finished job for tx_num: %d", i);
-			zp->tx_stats.packets += 1;
-			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
-			zp->buffer_blk_in_use[i] = 0;
-			zp->pending_writes--;
-			/* ZSONET_WRL(zp, offset, 0); */
-		} else {
-			/* ZSONET_WRL(zp, offset, 0); */
-			pr_err("MB - zsonet_tx_finish - empty_bulk: %d", i);
-		}
-	}
-}
+/* 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED) */
+/* 	{ */
+/* 		if (zp->buffer_blk_in_use[i]) */
+/* 		{ */
+/* 			pr_err("MB - zsonet_tx_finish - finished job for tx_num: %d", i); */
+/* 			zp->tx_stats.packets += 1; */
+/* 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i]; */
+/* 			zp->buffer_blk_in_use[i] = 0; */
+/* 			zp->pending_writes--; */
+/* 			/\* ZSONET_WRL(zp, offset, 0); *\/ */
+/* 		} else { */
+/* 			/\* ZSONET_WRL(zp, offset, 0); *\/ */
+/* 			pr_err("MB - zsonet_tx_finish - empty_bulk: %d", i); */
+/* 		} */
+/* 	} */
+/* } */
 
 static irqreturn_t zsonet_interrupt(int irq, void *dev_instance)
 {
@@ -560,6 +560,7 @@ zsonet_close(struct net_device *dev)
 {
 	struct zsonet *zp = netdev_priv(dev);
 
+	pr_err("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
 	/* bnx2_disable_int_sync(bp); */
 	/* bnx2_napi_disable(bp); */

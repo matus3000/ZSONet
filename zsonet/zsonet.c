@@ -298,7 +298,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	spin_lock(&zp->lock);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 	wmb(); rmb();
-	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
+	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK & ZSONET_INTR_RX_OK);
 	pr_err("MB - zsonet_interrupt status = %d, new_status = %d", status,
 	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS));
 	spin_unlock(&zp->lock);
@@ -313,7 +313,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	/* 	if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev)) */
 	/* 		netif_wake_queue(zp->dev); */
 	/* 	/\* status = status & ~ZSONET_INTR_TX_OK; *\/ */
-	/* 	/\* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); *\/ */
+	/* 	/\* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changinng status to %d", status); *\/ */
 	/* 	/\* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); *\/ */
 	/* 	if (zp->pending_writes == 0) */
 	/* 		mask = 0; */

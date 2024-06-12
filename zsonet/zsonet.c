@@ -59,9 +59,10 @@ struct zsonet {
 	
 	void			*buffer_blk[4];
 	dma_addr_t		buffer_blk_mapping[4];
-	struct sk_buff          *buffer_blk_sk_buff[4];
+  	struct sk_buff          *buffer_blk_sk_buff[4];
 	u16                     buffer_blk_in_use[4];
 	u8                      tx_buffer_index;
+	u8                      pending_writes;
 	
         void                    *rx_buffer;
 	dma_addr_t              rx_buffer_mapping;
@@ -262,6 +263,7 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 			zp->tx_stats.packets += 1;
 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 			zp->buffer_blk_in_use[i] = 0;
+			zp->pending_writes--;
 			/* ZSONET_WRL(zp, offset, 0); */
 		} else {
 			/* ZSONET_WRL(zp, offset, 0); */
@@ -300,6 +302,8 @@ zsonet_interrupt(int irq, void *dev_instance)
 		/* status = status & ~ZSONET_INTR_TX_OK; */
 		/* pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); */
 		/* ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); */
+		if (zp->pending_writes == 0)
+			mask = 0;
 		spin_unlock(&zp->tx_lock);
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
@@ -632,9 +636,20 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
 	spin_lock_irq(&zp->tx_lock);
 	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
+	zp->pending_writes++;
+	
 	wmb();	
 	ZSONET_WRL(zp, offset, (len << 16));
 	spin_unlock_irq(&zp->tx_lock);
+
+	{
+		spin_lock_irq(&zp->lock);
+		u32 x;
+		if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) {
+			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_REG_INTR_MASK);
+		}
+		spin_unlock_irq(&zp->lock);
+	}
 	
 free_skb:
 	pr_err("MB - zsonet_start_xmit - kfree");

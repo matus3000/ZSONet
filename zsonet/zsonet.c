@@ -720,7 +720,7 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	}
 	
 	pr_err("MB - zsonet_init_board - request regions");
-	rc = pci_request_io_regions(pdev, DRV_MODULE_NAME);
+	rc = pci_request_regions(pdev, DRV_MODULE_NAME);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot obtain PCI resources, aborting\n");
 		goto err_out_disable;
@@ -843,7 +843,7 @@ err_free:
 }
 
 static void
-zso_remove_one(struct pci_dev *pdev)
+zsonet_remove_one(struct pci_dev *pdev)
 {
 	pr_err("MB - zso_remove_one - get_drvdata");
 	struct net_device *dev = pci_get_drvdata(pdev);
@@ -875,7 +875,7 @@ static struct pci_driver zsonet_pci_driver = {
   .name = DRV_MODULE_NAME,
   .id_table = zsonet_pci_tbl,
   .probe = zso_init_one,
-  .remove = zso_remove_one
+  .remove = zsonet_remove_one
 };
 
 module_pci_driver(zsonet_pci_driver);

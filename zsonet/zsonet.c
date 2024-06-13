@@ -219,7 +219,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 
 	pr_err("MB - zsonet_rx_poll - work_done %d", work_done);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
-	pr_err("MB - zsonet_rx_poll ")
+	pr_err("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
 	if (work_done < budget) {
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);

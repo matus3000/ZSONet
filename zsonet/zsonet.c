@@ -291,8 +291,8 @@ zsonet_interrupt(int irq, void *dev_instance)
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 	wmb(); rmb();
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
-	pr_err("MB - zsonet_interrupt status = %d, new_status = %d", status,
-	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS));
+	pr_err("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status,
+	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS), ZSONET_RDL(zp, ZSONET_REG_INTR_MASK));
 
 	spin_unlock(&zp->lock);
 	

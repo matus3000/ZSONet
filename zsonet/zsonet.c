@@ -91,7 +91,7 @@ static void zsonet_setup_buffers(struct zsonet *zp) {
 		unsigned int val = *(unsigned int*) &zp->buffer_blk_mapping[i];
 		ZSONET_WRL(zp, offset, val);
 	}
-	dev_addr = *(unsigned int*) &zp->rx_buffer_mapping;
+	dev_addr = zp->rx_buffer_mapping;
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF, dev_addr);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_SIZE, RX_BUFF_SIZE);
 }
@@ -171,7 +171,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
-	  zp->rx_stats.dropped += 1;
+		zp->rx_stats.dropped += 1;
 		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size");
 		return 0;
 	}

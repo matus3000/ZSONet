@@ -168,8 +168,8 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = zp->rx_buffer_position;
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
-	unsigned  int data_len_with_mask = data_len & 0xffff;
-	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d, data_len_with_mask %d", z, data_len, data_len_with_mask);
+        data_len = data_len & 0xffff;
+	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d, data_len_with_mask %d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->rx_stats.dropped += 1;
@@ -184,6 +184,9 @@ static int zsonet_read_one(struct zsonet *zp) {
 		/// packet dropped
 		return 0;
 	}
+
+	pos = pos + 4;
+	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
 	zp->rx_buffer_position += data_len;
 	if (zp->rx_buffer_position >= RX_BUFF_SIZE)

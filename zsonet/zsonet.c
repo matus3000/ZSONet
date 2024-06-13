@@ -31,7 +31,6 @@
 
 #define ZSONET_RDL(zp, offset) readl(zp->regview + offset)
 #define ZSONET_WRL(zp, offset, val) writel(val, zp->regview + offset)
-#define ZSONET_WRW(zp, offset, val) writew(val, zp->regview + offset)
 
 MODULE_AUTHOR("Mateusz Bodziony <mb394086>");
 MODULE_DESCRIPTION("Zsonet Driver");
@@ -92,7 +91,7 @@ static void zsonet_setup_buffers(struct zsonet *zp) {
 	}
 	dev_addr = *(unsigned int*) &zp->rx_buffer_mapping;
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF, dev_addr);
-	ZSONET_WRW(zp, ZSONET_REG_RX_BUF_SIZE, RX_BUFF_SIZE);
+	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_SIZE, RX_BUFF_SIZE);
 }
 
 static void

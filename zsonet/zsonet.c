@@ -213,7 +213,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	spin_lock(&zp->rx_lock);
 	while (zp->rx_buffer_position != write_position) {
 		work_done += zsonet_read_one(zp);
-		
+		write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
 		if (work_done == budget)
 			break;
 	}

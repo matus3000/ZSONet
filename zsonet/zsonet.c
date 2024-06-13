@@ -168,7 +168,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = zp->rx_buffer_position;
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
-	unsigned  int data_len_with_mask = data_len | 0xffff;
+	unsigned  int data_len_with_mask = data_len & 0xffff;
 	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d, data_len_with_mask %d", z, data_len, data_len_with_mask);
 
 	if (data_len > RX_BUFF_SIZE) {

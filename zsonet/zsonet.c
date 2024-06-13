@@ -69,7 +69,7 @@ struct zsonet {
 	
         void                    *rx_buffer;
 	dma_addr_t              rx_buffer_mapping;
-	u16                     rx_buffer_position;
+	u32                     rx_buffer_position;
 	
 	u8			mac_addr[8];
 	u8                      irq_requested;
@@ -169,17 +169,17 @@ static int zsonet_read_one(struct zsonet *zp) {
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
         data_len = data_len & 0xffff;
-	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d", z, data_len);
+	pr_err("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->rx_stats.dropped += 1;
-		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size");
+		pr_err("MB - zsonet_read_one - data_len greater than buffer size");
 		return 1;
 	}
 	
 	skb = napi_alloc_skb(&zp->napi, data_len);
 	if (!skb) {
-		pr_err("MB - zsonet_read_one_without_lock - napi_alloc_skb failed");
+		pr_err("MB - zsonet_read_one - napi_alloc_skb failed");
 		zp->rx_stats.dropped += 1;
 		/// packet dropped
 		return 1;
@@ -196,7 +196,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
-	pr_err("MB - zsonet_read_one_without_lock - netif_rx");
+	pr_err("MB - zsonet_read_one - netif_rx");
         netif_receive_skb(skb);
 
 	return 1;
@@ -206,18 +206,19 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 {
 	int work_done = 0;
 	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
-	pr_err("MB - zsonet_rx_poll - budget %d", budget);
+	pr_err("MB - zsonet_rx_poll - budget %d, write_position: %d", budget, write_position);
 	
 	if (!budget) return 0;
 
 	spin_lock(&zp->rx_lock);
 	while (zp->rx_buffer_position != write_position) {
 		work_done += zsonet_read_one(zp);
+		
 		if (work_done == budget)
 			break;
 	}
 
-	pr_err("MB - zsonet_rx_poll - work_done %d", work_done);
+	pr_err("MB - zsonet_rx_poll - work_done %d, %d", work_done, (u32) zp->rx_buffer_position);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
 	pr_err("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
 	if (work_done < budget) {

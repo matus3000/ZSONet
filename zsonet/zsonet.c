@@ -128,7 +128,7 @@ zsonet_prepare_device(struct zsonet *zp)
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
                                              unsigned int len)
 {
-	pr_err("MB - readl_from_cyclic_buffer");
+	pr_err("MB - readl_from_cyclic_buffer offset %d", offset);
 	unsigned int result = 0;
 	if (len - offset >= 4) {
 		result = *(unsigned int *) (buff + offset);
@@ -168,7 +168,8 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = zp->rx_buffer_position;
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
-	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d", z, data_len);
+	unsigned  int data_len_with_mask = data_len | 0xffff;
+	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d, data_len_with_mask %d", z, data_len, data_len_with_mask);
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->rx_stats.dropped += 1;

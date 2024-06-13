@@ -740,11 +740,14 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pr_err("MB - zso_init_one - eth_hw_adddr_set\n");
 	eth_hw_addr_set(dev, zp->mac_addr);
 
-	dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_SG |
-		NETIF_F_TSO | NETIF_F_TSO_ECN |
-		NETIF_F_RXHASH | NETIF_F_RXCSUM;
 
-	dev->vlan_features = dev->hw_features;
+	pr_err("MB - zso_init_one features %lld", dev->features);
+	
+	/* dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_SG | */
+	/* 	NETIF_F_TSO | NETIF_F_TSO_ECN | */
+	/* 	NETIF_F_RXHASH | NETIF_F_RXCSUM; */
+
+	/* dev->vlan_features = dev->hw_features; */
 	/* dev->features |= dev->hw_features; */
 	
 	dev->min_mtu = MIN_ETHERNET_PACKET_SIZE;

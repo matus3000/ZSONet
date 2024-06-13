@@ -501,7 +501,7 @@ open_err:
 }
 
 static int
-zsonet_close(struct net_device *dev)
+zsonet_close(struct net_device *dev){
 
 	struct zsonet *zp = netdev_priv(dev);
 

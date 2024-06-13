@@ -311,17 +311,15 @@ zsonet_interrupt(int irq, void *dev_instance)
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
-	/* if (status & ZSONET_INTR_RX_OK) { */
-	/*         pr_info("MB - zsonet_interrupt - rx_lock "); */
-	/* 	spin_lock(&zp->lock); */
-	/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK); */
-	/* 	if (napi_schedule_prep(&zp->napi)) { */
-	/* 		__napi_schedule(&zp->napi); */
-	/* 	} else { */
-	/* 		mask |= ZSONET_INTR_RX_OK; */
-	/* 	} */
-	/* 	spin_unlock(&zp->lock); */
-	/* } */
+	if (status & ZSONET_INTR_RX_OK) {
+	        pr_info("MB - zsonet_interrupt - rx_lock ");
+		spin_lock(&zp->lock);
+		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK);
+		if (napi_schedule_prep(&zp->napi)) {
+			__napi_schedule(&zp->napi);
+		}
+		spin_unlock(&zp->lock);
+	}
 
 	/* spin_lock(&zp->lock); */
 	/* status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
@@ -577,7 +575,8 @@ static inline void update_tx_stats(unsigned int size) {
 static netdev_tx_t
 zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	pr_err("MB - zsonet_start_xmit");
+	pr_err("MB - zsonet_start_xmit ");
+
 	struct zsonet       *zp;
 	/* struct netdev_queue *txq; */
 	void *               tx_buf = NULL;

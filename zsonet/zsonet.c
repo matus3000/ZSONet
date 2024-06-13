@@ -221,6 +221,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	pr_err("MB - zsonet_rx_poll - work_done %d, rx_read_pos %d, rx_write_pos %d", work_done, (u32) zp->rx_buffer_position, write_position);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
 	pr_err("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
+
 	if (work_done < budget) {
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);
@@ -314,23 +315,13 @@ zsonet_interrupt(int irq, void *dev_instance)
 	if (status & ZSONET_INTR_RX_OK) {
 	        pr_info("MB - zsonet_interrupt - rx_lock ");
 		spin_lock(&zp->lock);
-		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK);
 		if (napi_schedule_prep(&zp->napi)) {
 			__napi_schedule(&zp->napi);
+			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
 		}
 		spin_unlock(&zp->lock);
 	}
 
-	/* spin_lock(&zp->lock); */
-	/* status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
-	/* wmb(); rmb(); */
-	/* if (!(mask & ZSONET_INTR_TX_OK)) */
-	/* 	pr_err("MB - zsonet_interrupt - turning TX interrupt off"); */
-	/* ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, mask); */
-
-	/* spin_unlock(&zp->lock); */
-
-	/* pr_err("MB - zsonet_interrupt - return"); */
 	return IRQ_HANDLED;
 }
 

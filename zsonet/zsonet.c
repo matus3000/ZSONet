@@ -114,7 +114,7 @@ zsonet_prepare_device(struct zsonet *zp)
   
 	pr_err("MB - zsonet_prepare_device");
 	zsonet_setup_buffers(zp);
-	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, 0);
+	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ~0);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_RX_OK | ZSONET_INTR_TX_OK);
 	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 1);
 }
@@ -314,8 +314,8 @@ zsonet_interrupt(int irq, void *dev_instance)
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
-	pr_err("MB - zsonet_interrupt RX_READ_POS RX_WRITE_POS = %d",
-	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET));
+	pr_err("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
+	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
 
 	if (status & ZSONET_INTR_RX_OK) {
 	        pr_info("MB - zsonet_interrupt - rx_lock ");
@@ -507,6 +507,9 @@ zsonet_close(struct net_device *dev){
 
 	pr_err("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
+	pr_err("MB - zsonet_close - napi_disable");
+	napi_disable(&zp->napi);
+
 	pr_err("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
 	pr_err("MB - zsonet_close - zsonet_free_mem");

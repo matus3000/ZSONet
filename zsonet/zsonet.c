@@ -226,6 +226,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);
 	  if (napi_complete_done(&zp->napi, work_done)) {
+		  pr_err("MB - zsonet_rx_poll - rearming interrupts");
 		  ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
 	  }
 	  spin_unlock_irqrestore(&zp->lock, flags);

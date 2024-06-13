@@ -295,6 +295,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
 	pr_err("MB - zsonet_interrupt status = %d, new_status = %d", status,
 	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS));
+
 	spin_unlock(&zp->lock);
 	
 	pr_info("MB - zsonet_interrupt - Status %d", status);
@@ -310,6 +311,9 @@ zsonet_interrupt(int irq, void *dev_instance)
 		spin_unlock(&zp->tx_lock);
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
+
+	pr_err("MB - zsonet_interrupt RX_READ_POS RX_WRITE_POS = %d",
+	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET));
 
 	if (status & ZSONET_INTR_RX_OK) {
 	        pr_info("MB - zsonet_interrupt - rx_lock ");
@@ -333,63 +337,6 @@ zsonet_interrupt(int irq, void *dev_instance)
 	/* pr_err("MB - zsonet_interrupt - return"); */
 	return IRQ_HANDLED;
 }
-
-/* static irqreturn_t */
-/* zsonet_interrupt(int irq, void *dev_instance) */
-/* { */
-/*         pr_err("MB - zsonet_interrupt"); */
-/* 	struct zsonet *zp; */
-/* 	struct net_device *dev = dev_instance; */
-/* 	unsigned int status; */
-/* 	unsigned int mask = ZSONET_INTR_TX_OK; */
-	
-/* 	zp = netdev_priv(dev); */
-
-/* 	spin_lock_irq(&zp->lock); */
-/* 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
-/* 	wmb(); rmb(); */
-/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, 0); */
-/* 	spin_unlock_irq(&zp->lock); */
-	
-/* 	pr_info("MB - zsonet_interrupt - Status %d", status); */
-/* 	if  (status & ZSONET_INTR_TX_OK) { */
-/* 		pr_info("MB - zsonet_interrupt - TX - spin_lock_irq"); */
-/* 		spin_lock(&zp->tx_lock); */
-/* 		for (int i = 0; i < 4; ++i) { */
-/* 			zsonet_tx_finish(zp, i); */
-/* 		} */
-/* 		if (!zp->buffer_blk_in_use[zp->tx_buffer_index] && netif_queue_stopped(zp->dev))  */
-/* 			netif_wake_queue(zp->dev); */
-/* 		status = status & ~ZSONET_INTR_TX_OK; */
-/* 		pr_info("MB - zsonet_interrupt - spin_lock_irq - Changing status to %d", status); */
-/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status); */
-/* 		spin_unlock(&zp->tx_lock); */
-/* 		pr_info("MB - zsonet_interrupt - spin_unlock_irq "); */
-/* 	} */
-
-/* 	if (status & ZSONET_INTR_RX_OK) { */
-/* 	        pr_info("MB - zsonet_interrupt - rx_lock "); */
-/* 		spin_lock_irq(&zp->lock); */
-/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, status & ~ZSONET_INTR_RX_OK); */
-/* 		if (napi_schedule_prep(&zp->napi)) { */
-/* 			__napi_schedule(&zp->napi); */
-/* 		} else { */
-/* 			mask |= ZSONET_INTR_RX_OK; */
-/* 		}		 */
-/* 		spin_unlock_irq(&zp->lock); */
-/* 	} */
-
-/* 	spin_lock_irq(&zp->lock); */
-/* 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS); */
-/* 	wmb(); rmb(); */
-/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, mask); */
-/* 	spin_unlock_irq(&zp->lock); */
-	
-/* 	return IRQ_HANDLED; */
-/* } */
-
-
-
 
 static void
 zsonet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)

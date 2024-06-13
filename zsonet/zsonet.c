@@ -17,6 +17,7 @@
 
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
+#include <string.h>
 
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
@@ -131,8 +132,12 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 		result = *(unsigned int *) (buff + offset);
 	} else {
 		int left = len - offset;
-		memcpy(&result, buff+offset, left);
-		memcpy(&result + left, buff, 4 - left);
+		char *lr = ((char*) &result);
+		char *rr = ((char*) &result) + left;
+		if (left > 0) {
+		  memcpy(lr, buff + offset, left);
+		}
+		memcpy(rr, buff, 4 - left);
 	}
 	pr_err("MB - readl_from_cyclic_buffer - result %d", result);
 	return result;
@@ -146,37 +151,12 @@ static void read_from_cyclic_buffer(void *dest, const void *buff,
 	int left = len - offset;
 	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
 	if (left >= size) {
-		memcpy(dest, buff, size);
+		memcpy(dest, buff+offset, size);
 	} else {
 		memcpy(dest, buff+offset, left);
 		memcpy(dest + left, buff, size - left);
 	}
 }
-
-/* static struct sk_buff *zsonet_read_one_without_lock(struct zsonet *zp) */
-/* { */
-/* 	unsigned int pos, data_len; */
-/* 	struct sk_buff *skb; */
-	
-/* 	pos = zp->rx_buffer_position; */
-/* 	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE)); */
-/* 	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len); */
-	
-/* 	if (data_len > RX_BUFF_SIZE) { */
-/* 		return NULL; */
-/* 	} */
-
-/* 	skb = netdev_alloc_skb(zp->dev, data_len); */
-/* 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len); */
-/* 	zp->rx_buffer_position += data_len; */
-/* 	if (zp->rx_buffer_position >= RX_BUFF_SIZE) */
-/* 		zp->rx_buffer_position -= RX_BUFF_SIZE; */
-
-/* 	skb_put(skb, data_len); */
-/* 	skb->protocol = eth_type_trans(skb, zp->dev); */
-	
-/* 	return skb; */
-/* } */
 
 static int zsonet_read_one(struct zsonet *zp) {
 
@@ -195,7 +175,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	
 	skb = napi_alloc_skb(&zp->napi, data_len);
 	if (!skb) {
-		pr_err("MB - zsonet_read_one_without_lock - netdev_alloc_skb failed");
+		pr_err("MB - zsonet_read_one_without_lock - napi_alloc_skb failed");
 		zp->rx_stats.dropped += 1;
 		/// packet dropped
 		return 0;

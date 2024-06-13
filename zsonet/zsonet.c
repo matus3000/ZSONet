@@ -17,7 +17,7 @@
 
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
-#include <string.h>
+
 
 #define DRV_MODULE_NAME "zsonet"
 #define PCI_VENDOR_ID_ZSONET 0x0250
@@ -120,8 +120,9 @@ zsonet_prepare_device(struct zsonet *zp)
 
 	pr_err("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
 	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
-
 }
+
+
 
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
                                              unsigned int len)

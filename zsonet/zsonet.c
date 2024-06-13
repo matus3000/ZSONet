@@ -117,6 +117,10 @@ zsonet_prepare_device(struct zsonet *zp)
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ~0);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_RX_OK | ZSONET_INTR_TX_OK);
 	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 1);
+
+	pr_err("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
+	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
+
 }
 
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,

@@ -13,6 +13,7 @@
 #include <asm/io.h>
 
 #include "zsonet.h"
+#include "linux/byteorder/generic.h"
 #include "net/net_debug.h"
 
 #include <linux/spinlock.h>
@@ -165,8 +166,9 @@ static int zsonet_read_one(struct zsonet *zp) {
 	struct sk_buff *skb;
 
 	pos = zp->rx_buffer_position;
-	data_len = le32_to_cpu(readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE));
-	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len);
+	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
+	data_len = le32_to_cpu(z);
+	pr_err("MB - zsonet_read_one_without_lock - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
 	  zp->rx_stats.dropped += 1;

@@ -185,13 +185,15 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pr_err("MB - zsonet_read_one_without_lock - data_len:%u", data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
+	  zp->rx_stats.dropped += 1;
 		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size");
 		return 0;
 	}
 	
-	skb = netdev_alloc_skb(zp->dev, data_len);
+	skb = napi_alloc_skb(&zp->napi, data_len);
 	if (!skb) {
 		pr_err("MB - zsonet_read_one_without_lock - netdev_alloc_skb failed");
+		zp->rx_stats.dropped += 1;
 		/// packet dropped
 		return 0;
 	}
@@ -203,7 +205,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 	pr_err("MB - zsonet_read_one_without_lock - netif_rx");
-	netif_rx(skb);
+        netif_receive_skb(skb);
 
 	return 1;
 }
@@ -469,7 +471,7 @@ zsonet_open(struct net_device *dev)
 	pr_err("MB - zsonet_open - zsonet_init_napi");
 	zsonet_init_napi(zp);
 	pr_err("MB - zsonet_open - zsonet_napi_enable");
-	zsonet_napi_enable(zp);
+	napi_enable(&zp->napi);
 
 	pr_err("MB - zsonet_open - zsonet_alloc_mem");
 	rc = zsonet_alloc_mem(zp);
@@ -500,7 +502,7 @@ open_err:
 
 static int
 zsonet_close(struct net_device *dev)
-{
+
 	struct zsonet *zp = netdev_priv(dev);
 
 	pr_err("MB - zsonet_close - netif_carrier_of");

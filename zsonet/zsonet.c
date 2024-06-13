@@ -432,7 +432,7 @@ static void zsonet_init_napi(struct zsonet *zp)
 }
 
 
-static void zsonet_napi_enable(struct zsonet *zp) {}
+
 
 static int
 zsonet_request_irq(struct zsonet *zp)

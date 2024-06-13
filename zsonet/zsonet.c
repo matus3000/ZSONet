@@ -128,7 +128,7 @@ zsonet_prepare_device(struct zsonet *zp)
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
                                              unsigned int len)
 {
-	pr_err("MB - readl_from_cyclic_buffer offset %d", offset);
+	/* pr_err("MB - readl_from_cyclic_buffer offset %d", offset); */
 	unsigned int result = 0;
 	if (len - offset >= 4) {
 		result = *(unsigned int *) (buff + offset);
@@ -141,7 +141,7 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 		}
 		memcpy(rr, buff, 4 - left);
 	}
-	pr_err("MB - readl_from_cyclic_buffer - result %d", result);
+	/* pr_err("MB - readl_from_cyclic_buffer - result %d", result); */
 	return result;
 }
 
@@ -174,7 +174,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	if (data_len > RX_BUFF_SIZE) {
 		zp->rx_stats.dropped += 1;
 		pr_err("MB - zsonet_read_one_without_lock - data_len greater than buffer size");
-		return 0;
+		return 1;
 	}
 	
 	skb = napi_alloc_skb(&zp->napi, data_len);
@@ -182,16 +182,18 @@ static int zsonet_read_one(struct zsonet *zp) {
 		pr_err("MB - zsonet_read_one_without_lock - napi_alloc_skb failed");
 		zp->rx_stats.dropped += 1;
 		/// packet dropped
-		return 0;
+		return 1;
 	}
 
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
-	zp->rx_buffer_position += data_len;
-	if (zp->rx_buffer_position >= RX_BUFF_SIZE)
-		zp->rx_buffer_position -= RX_BUFF_SIZE;
 
+	pos += data_len;
+	if (pos >= RX_BUFF_SIZE)
+		pos -= RX_BUFF_SIZE;
+	zp->rx_buffer_position = pos;
+	
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 	pr_err("MB - zsonet_read_one_without_lock - netif_rx");
@@ -216,7 +218,8 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	}
 
 	pr_err("MB - zsonet_rx_poll - work_done %d", work_done);
-
+	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
+	pr_err("MB - zsonet_rx_poll ")
 	if (work_done < budget) {
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);
@@ -225,7 +228,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	  }
 	  spin_unlock_irqrestore(&zp->lock, flags);
 	}
-	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
+
 	spin_unlock(&zp->rx_lock);
 
 	return work_done;

@@ -218,7 +218,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 			break;
 	}
 
-	pr_err("MB - zsonet_rx_poll - work_done %d, %d", work_done, (u32) zp->rx_buffer_position);
+	pr_err("MB - zsonet_rx_poll - work_done %d, rx_read_pos %d, rx_write_pos %d", work_done, (u32) zp->rx_buffer_position, write_position);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
 	pr_err("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
 	if (work_done < budget) {

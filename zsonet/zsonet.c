@@ -49,7 +49,7 @@ struct zsonet_stats {
 	u64 packets;
 	u64 bytes;
 	u64 dropped;
-	struct u64_stats_sync  usc;
+	u64 err;
 };
 
 
@@ -172,19 +172,25 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pr_err("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
-		zp->rx_stats.dropped += 1;
+		zp->dev->stats.rx_dropped++;
+		/// Device is in an unknown state so it's easiest to assume we need to start
+		/// reading from write_offset
+		zp->rx_buffer_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET); 
 		pr_err("MB - zsonet_read_one - data_len greater than buffer size");
 		return 1;
 	}
-	
+
+
 	skb = napi_alloc_skb(&zp->napi, data_len);
 	if (!skb) {
-		pr_err("MB - zsonet_read_one - napi_alloc_skb failed");
-		zp->rx_stats.dropped += 1;
-		/// packet dropped
+		pr_err("MB - zsonet_read_one - dropping packet");
+		zp->dev->stats.rx_dropped += 1;
+		zp->rx_buffer_position += data_len + 4;
+		if (zp->rx_buffer_position >= RX_BUFF_SIZE) zp->rx_buffer_position -= RX_BUFF_SIZE;
+		
 		return 1;
 	}
-
+	
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
@@ -196,10 +202,18 @@ static int zsonet_read_one(struct zsonet *zp) {
 	
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
-	pr_err("MB - zsonet_read_one - netif_rx");
         netif_receive_skb(skb);
 
+	zp->rx_stats.packets += 1;
+	zp->rx_stats.bytes += data_len + 1;	
 	return 1;
+}
+
+static void zsonet_update_rx_err(struct zsonet *zp) {
+	unsigned int missed = ZSONET_RDL(zp, ZSONET_REG_RX_MISSED);
+	ZSONET_WRL(zp, ZSONET_REG_RX_MISSED, 0);
+	zp->rx_stats.err = missed;
+	
 }
 
 static int zsonet_rx_poll(struct zsonet *zp, int budget)
@@ -217,6 +231,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 		if (work_done == budget)
 			break;
 	}
+	zsonet_update_rx_err(zp);
 
 	pr_err("MB - zsonet_rx_poll - work_done %d, rx_read_pos %d, rx_write_pos %d", work_done, (u32) zp->rx_buffer_position, write_position);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
@@ -317,8 +332,8 @@ zsonet_interrupt(int irq, void *dev_instance)
 	        pr_info("MB - zsonet_interrupt - rx_lock ");
 		spin_lock(&zp->lock);
 		if (napi_schedule_prep(&zp->napi)) {
-			__napi_schedule(&zp->napi);
 			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
+			__napi_schedule(&zp->napi);
 		}
 		spin_unlock(&zp->lock);
 	}
@@ -336,6 +351,7 @@ zsonet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 
 	stats->rx_bytes = zp->rx_stats.bytes;
 	stats->rx_packets = zp->rx_stats.packets;
+	stats->rx_errors = zp->rx_stats.err;
 	stats->tx_packets = zp->tx_stats.packets;
 	stats->tx_bytes = zp->tx_stats.bytes;
 }
@@ -527,7 +543,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	
 
 	if (unlikely(len > TX_BUFF_SIZE)) {
-		zp->tx_stats.dropped += 1;
+		zp->dev->stats.tx_dropped++;
 		pr_err("MB - zsonet_start_xmit - drop of packet because of exceeding length");
 		goto free_skb;
 	}

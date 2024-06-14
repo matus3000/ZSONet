@@ -25,6 +25,7 @@
 #define BLOCK_SZ    1024
 #define MAX_HOST_NAME 1024
 
+#define EV_RECONNECT 0
 #define EV_CONNECT 1
 #define EV_SEND 2
 #define EV_READ 3
@@ -86,6 +87,8 @@ struct string_builder {
 	int size;
 };
 
+int ci_reopen_socket(struct connection_info *ci);
+
 struct ring_buf *rb_allocate(unsigned n) {
 	void * buf = malloc(n  * sizeof(void *));
 	if (!buf) return NULL;
@@ -137,16 +140,16 @@ int sb_append(struct string_builder *sb, char *buff, unsigned len) {
 }
 
 char *sb_build(struct string_builder *sb, unsigned int *len) {
-	unsigned int size = min(sb->offset + 2, 16);
+	unsigned int size = min(sb->offset + 1, 16);
 	char * res = malloc(size);
 	if (!res) {
-		fprintf(stderr, "sb_build - Could not allocate memory for string of length %d", size);
+	        fprintf(stderr, "sb_build - Could not allocate memory for string of length %d\n", size);
 		return NULL;
 	}
 
-	strncpy(res, sb->s, sb->offset + 1);
-	res[sb->offset + 1] = '\0';
-	*len = sb->offset + 2;
+	strncpy(res, sb->s, sb->offset);
+	res[sb->offset] = '\0';
+	*len = sb->offset;
 	sb->offset = 0;
 	
 	return res;
@@ -178,7 +181,7 @@ int slist_add(struct list *slist, char *buf, unsigned len, int n)
 
 int slist_pop(struct list *slist) {
 	if (!slist->head || !slist->tail)
-		fprintf(stderr, "slist_pop - null-value head %p tail %p ", slist->head, slist->tail);
+		fprintf(stderr, "slist_pop - null-value head %p tail %p \n", slist->head, slist->tail);
 	struct input_node *old = slist->head;
 	void *next = slist->head->next;
 	if (old == slist->tail) slist->tail = next;
@@ -186,6 +189,7 @@ int slist_pop(struct list *slist) {
 
 	free(old->input_string);
 	free(old);
+	return 0;
 }
 
 int ci_has_job(struct connection_info *ci) {
@@ -195,7 +199,7 @@ int ci_has_job(struct connection_info *ci) {
 
 void ci_release_job(struct connection_info *ci) {
 	if (!ci->node) {
-		fprintf(stderr, "release_job - ci->node == NULL");
+		fprintf(stderr, "release_job - ci->node == NULL\n");
 	}
 	void *next = ci->node->next;
 	ci->node->pending_sends -= 1;
@@ -210,9 +214,12 @@ void ci_release_job(struct connection_info *ci) {
 struct connection_info *rb_pop(struct ring_buf *rb) {
 	void *res;
 	if (rb->r_offset == rb->w_offset)
-		fprintf(stderr, "Reading from empty buffer");
+		fprintf(stderr, "Reading from empty buffer\n");
         res = rb->buf[rb->r_offset++];
-	if (rb->r_offset >= rb->len) rb->r_offset -= rb->len;
+	if (rb->r_offset >= rb->len){
+	    rb->r_offset -= rb->len;
+	    if (rb->w_offset >= rb->len) rb->w_offset -= rb->len;
+	}
 	return res;
 }
 
@@ -222,12 +229,12 @@ void rb_add(struct ring_buf *rb, struct connection_info *ci) {
 }
 
 bool rb_empty(struct ring_buf *rb) {
-	return rb->r_offset != rb->w_offset;
+  return rb->r_offset == rb->w_offset;
 }
 
 __must_check int add_connect_request(struct io_uring *ring, struct connection_info *cp)
 {
-	fprintf(stderr, "add_connect_request");
+	fprintf(stderr, "add_connect_request\n");
 	struct io_uring_sqe *sqe;
 	struct request *req;
 	size_t size = sizeof(struct request);
@@ -241,7 +248,7 @@ __must_check int add_connect_request(struct io_uring *ring, struct connection_in
 
 	req->event_type = EV_CONNECT;
 	req->cp = cp;
-		fprintf(stderr, "add_connect_request - prep connect");
+		fprintf(stderr, "add_connect_request - prep connect\n");
 	io_uring_prep_connect(sqe, cp->socket, (const struct sockaddr*) &cp->address, sizeof(cp->address));
 	io_uring_sqe_set_data(sqe, req);
 	return 0;
@@ -249,6 +256,8 @@ __must_check int add_connect_request(struct io_uring *ring, struct connection_in
 
 __must_check int add_close_request(struct io_uring *ring, struct connection_info *cp)
 {
+	fprintf(stderr, "add_close_request\n");
+
 	struct io_uring_sqe *sqe;
 	struct request *req;
 	size_t size = sizeof(struct request);
@@ -263,7 +272,7 @@ __must_check int add_close_request(struct io_uring *ring, struct connection_info
 	req->event_type = EV_CLOSE;
 	req->cp = cp;
 	io_uring_prep_close(sqe, cp->socket);
-
+	io_uring_sqe_set_data(sqe, req);
 	return 0;
 }
 
@@ -328,6 +337,8 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	unsigned i = 0;
 	unsigned offset = 0;
 	struct input_node *next = NULL;
+
+	fprintf(stderr, "read_aftermath - cqe->res: %d\n", cqe->res);
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
@@ -336,7 +347,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 		if (i < len) {
 			unsigned len = 0;
 			char *res = sb_build(sb, &len);
-			fprintf(stderr, "read_aftermath - read string: %s", res);
+			fprintf(stderr, "read_aftermath - read string: %s\n, %d\n", res, len);
 			if (!res) {
 				free(rq);
 				return 0;
@@ -347,31 +358,35 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 		}
 	}
 
+	fprintf(stderr, "read_aftermath - waking_up\n");
+
 	if (next) {
 		while (!rb_empty(sq)) {
-			fprintf(stderr, "read_aftermath - moving process to waiting queue");
 			struct connection_info *ci = rb_pop(sq);
+			fprintf(stderr, "read_aftermath - moving process to waiting queue - state %d\n", ci->state);
 			ci->node = next;
 			rb_add(wq, ci);
 		}
 	}
 	
+	fprintf(stderr, "read_aftermath - freeing\n");
 	free(rq);
 	return 1;
 }
 
 void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq) {
-	fprintf(stderr, "send-aftermath - sent res %d", cqe->res);
+	fprintf(stderr, "send-aftermath - sent res %d\n", cqe->res);
 	struct request *rq = (struct request *) cqe->user_data;
 	
 	if (cqe->res < 0) {
-		return;
+		fprintf(stderr, "%s - send error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+		rq->cp->state = EV_RECONNECT;
 	} else if (cqe->res >= 0) {
-		
+		rq->cp->state = EV_SEND;
 	}
 
 	ci_release_job(rq->cp);
-	rq->cp->state = EV_SEND;
+
 	
 	if (ci_has_job(rq->cp)) {
 		rb_add(wq, rq->cp);
@@ -386,18 +401,26 @@ void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_b
 void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq, struct list *slist)
 {
 	struct request *rq = (struct request *) cqe->user_data;
-	
-	if (cqe->res < 0) {
-		return;
-	} else if (cqe->res >= 0) {
-		
+
+	fprintf(stderr, "connect_aftermath res %d\n", cqe->res);
+
+        if (cqe->res < 0) {
+		fprintf(stderr, "%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+		rq->cp->state = EV_RECONNECT;
+		if (rq->cp->list == slist && ci_has_job(rq->cp)) {
+			//Jesteśmy już po raz drugi w connect,
+			//więc skipujemy linię, dla której nie udało się nam połączyć.
+			ci_release_job(rq->cp);
+		}
+	} else {
+		rq->cp->state = EV_SEND;
 	}
 
 	if (rq->cp->list != slist) {
 		rq->cp->node = slist->head;
 		rq->cp->list = slist;
 	}
-	rq->cp->state = EV_SEND;	
+
 	if (ci_has_job(rq->cp)) {
 		rb_add(wq, rq->cp);
 	} else {
@@ -409,8 +432,11 @@ void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct rin
 
 void close_aftermath(struct io_uring_cqe *cqe) {
 	if (cqe->res < 0) {
-
+	  struct request* req = (void *) cqe->user_data;
+	  fprintf(stderr, "%s - close error: %s\n", req->cp->string_name, strerror(-cqe->res));
 	}
+
+	free((void *) cqe->user_data);
 }
 
 void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
@@ -431,25 +457,26 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 		rb_add(waiting_q, &cip[i]);
 	}
 
-	fprintf(stderr, "main_loop - r: %d, w: %d", waiting_q->r_offset, waiting_q->w_offset);
+	fprintf(stderr, "main_loop - r: %d, w: %d\n", waiting_q->r_offset, waiting_q->w_offset);
 	
 	bool schedule_read = true;
 	struct io_uring_cqe *cqe;
 	int continue_loop = 1;
 	int close_cnt = 0;
+	int sched_open_cnt = 0;
+	int open_cnt = 0;
+	int pending = 0;
 	while (1) {
 		unsigned x = io_uring_sq_space_left(ring);
-		fprintf(stderr, "main_loop - sq_space_left %d", x);
+		fprintf(stderr, "main_loop - sq_space_left %d \n", x);
 		int rc;
-		if (x > 0 && schedule_read) {
-			rc = add_read_request(ring, &read_buf);
-			x--;
-			schedule_read = false;
-			submissions++;
-		}
 		while (x > 0 && !rb_empty(waiting_q)) {
 			struct connection_info *ci = rb_pop(waiting_q);
 			switch(ci->state) {
+			case EV_RECONNECT:
+				rc = ci_reopen_socket(ci);
+				if (rc < 0) continue;
+				ci->state = EV_CONNECT;
 			case EV_CONNECT:
 				rc = add_connect_request(ring, ci);
 				break;
@@ -458,11 +485,19 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 				break;
 			case EV_CLOSE:
 				rc = add_close_request(ring, ci);
-				close_cnt++;
 				break;
 			}
 			--x;
 			submissions++;
+			pending++;
+		}
+		if (x > 0 && schedule_read) {
+			rc = add_read_request(ring, &read_buf);
+			x--;
+			schedule_read = false;
+			submissions++;
+			fprintf(stderr, "main_loop - scheduling read\n");
+			pending++;
 		}
 
 		if (submissions > 0) {
@@ -471,16 +506,35 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 		}
 
 		if (!continue_loop) {
+			while (!rb_empty(sleeping_q)){
+				struct connection_info *ci = rb_pop(sleeping_q);
+				if (ci->state == EV_CONNECT || ci->state == EV_RECONNECT)
+				{
+					++close_cnt;
+				} else
+				{
+					ci->state = EV_CLOSE;
+					rb_add(waiting_q, ci);
+					fprintf(stderr, "main_loop - %s socket to close\n", ci->string_name);
+				}
+				
+			}
+			
 			if (close_cnt == n)
 				break;
-			else
-				fprintf(stderr, "main_loop - close_cnt %d", close_cnt);
+			/* else */
+			/* 	fprintf(stderr, "main_loop - close_cnt %d \n", close_cnt); */
 		}
 		
+		/* fprintf(stderr, "main_loop - pending %d\n", pending); */
 
+		if (pending == 0) {
+			continue;
+		}
 		int ret = io_uring_wait_cqe(ring, &cqe);
+		--pending;
 		if (ret < 0) {
-			fprintf(stderr, "main-loop - io_uring_wait_cqe < 0 - %d", ret);
+			fprintf(stderr, "main-loop - io_uring_wait_cqe < 0 - %d\n", ret);
 			abort();
 		}
 		struct request *rq = (struct request *) cqe->user_data;
@@ -502,32 +556,13 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			++close_cnt;
 			break;
 		default:
-			fprintf(stderr, "main_loop - unkonwn event type: %d", event);
+			fprintf(stderr, "main_loop - unkonwn event type: %d\n", event);
 		}
 
 		io_uring_cqe_seen(ring, cqe);
 		
 	}
 
-}
-
-int *create_sockets(int n, const char* ips[])
-{
-	int* result = malloc(n * sizeof(int));
-	for (int i = 0; i < n; ++i) result[i] = -1;
-	
-	
-	if (!result) return result;
-
-	for (int i = 0; i < n; ++i) {
-		result[i] = socket(PF_INET, SOCK_STREAM, 0);
-		if (result[i] < 0)
-			goto err_cleanup;
-	}
-
-	return result;
-err_cleanup:
-	return NULL;
 }
 
 
@@ -538,23 +573,25 @@ int sockaddr_init(struct sockaddr_in *sockadrr_in, char *input) {
 
 	char *server_ip = NULL;
 	sockadrr_in->sin_family = AF_INET; // Use IPv4
-	sockadrr_in->sin_port = htons(port);
 	pos = strchr(input, ':');
-
 	if (pos == NULL) goto err;
 	int index = pos - input;
 	if (index < MAX_HOST_NAME - 1) {
 		strncpy(ip, input, index);
-		ip[index + 1] = '\0';
+		ip[index] = '\0';
 		server_ip = ip;
 	} else {
 		goto err;
 	}
 
-	fprintf(stderr, "sockaddr_in - ip: %s", ip);
+	sscanf(pos, ":%d", &port);
+	sockadrr_in->sin_port = htons(port);
+
+	fprintf(stderr, "sockaddr_init - ip: %s, port: %d\n", ip, port);
 
 	if (inet_pton(AF_INET, server_ip, &sockadrr_in->sin_addr) <= 0) {
-		goto err;
+	  fprintf(stderr, "sockadddr_init - could not resolve name: %s\n", ip);
+	  goto err;
 	}
 
 	return  0;
@@ -564,6 +601,24 @@ err:
 }
 
 
+int ci_reopen_socket(struct connection_info *ci) {
+	int rc = 0;
+	if (ci->socket >= 0) close(ci->socket);
+	ci->socket = socket(PF_INET, SOCK_STREAM, 0);
+	if (ci->socket < 0) {
+		rc = -1;
+		fprintf(stderr, "%s - socket error %s\n", ci->string_name, strerror(errno));
+	}
+	rc = sockaddr_init(&ci->address, (char *) ci->string_name);
+	if (rc < 0) {
+		close(ci->socket);
+	        ci->socket = -1;
+		fprintf(stderr, "%s - socket error %s\n", ci->string_name, strerror(errno));
+	}
+
+	return rc;
+};
+
 struct connection_info *ci_alloc_and_init_table(unsigned n, char *input_strings[]) {
 	struct connection_info * result = calloc(n, sizeof(struct connection_info));
 	if (!result) return result;
@@ -571,13 +626,19 @@ struct connection_info *ci_alloc_and_init_table(unsigned n, char *input_strings[
 	int rc = 0;
 	for (int i = 0; i < n; ++i) {
 		result[i].socket = socket(PF_INET, SOCK_STREAM, 0);
-		if (socket < 0) goto err;
+		if (result[i].socket < 0) {
+		  fprintf(stderr, "%s - socket error %s\n", input_strings[i], strerror(errno));
+		}
 		rc = sockaddr_init(&result[i].address, input_strings[i]);
-		if (rc < 0) goto err;
+		if (rc < 0) {
+		  close(result[i].socket);
+		  result[i].socket = -1;
+		  fprintf(stderr, "%s - socket error %s\n", input_strings[i], strerror(errno));
+		}
 		result[i].string_name = input_strings[i];
 	}
-err:
-	return NULL;
+
+	return result;
 }
 
 struct connection_info *ci_free_table(struct connection_info *table, int n) {
@@ -594,10 +655,13 @@ int main(int argc, const char *argv[]) {
 	io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
 	struct connection_info* ci_table = ci_alloc_and_init_table(argc -1, (char **) &argv[1]);
 
-	if (ci_table) {
-		main_loop(&ring, ci_table, argc - 1);
-	}
+	if (!ci_table) goto uring_exit;
+
+	main_loop(&ring, ci_table, argc - 1);
 	ci_free_table(ci_table, argc - 1);
+
+
+ uring_exit:
 	io_uring_queue_exit(&ring);
 }
 

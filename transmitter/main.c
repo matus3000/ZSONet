@@ -552,9 +552,9 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	int pending = 0;
 	while (1) {
 		unsigned x = io_uring_sq_space_left(ring);
-		pr_log("main_loop: schedule_read %b, pending %d, close_cnt %d, continue %d, ring_space %d",
+		pr_log("w_main_loop: schedule_read %b, pending %d, close_cnt %d, continue %d, ring_space %d\n",
 		       schedule_read, pending, close_cnt, continue_loop, x);
-		pr_log("main_loop: sq_r: %d, sq_w: %d, wq_r: %d, wq_s: %d", sleeping_q->r_offset,
+		pr_log("w_main_loop: sq_r: %d, sq_w: %d, wq_r: %d, wq_s: %d\n", sleeping_q->r_offset,
 		       sleeping_q->w_offset, waiting_q->r_offset, waiting_q->w_offset);
 
 		int rc;
@@ -564,7 +564,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			case EV_RECONNECT:
 				rc = ci_reopen_socket(ci, sleeping_q, waiting_q);
 				if (rc < 0) {
-					pr_log("main_loop: Could not reopen socket");
+					pr_log("main_loop: Could not reopen socket\n");
 					continue;
 				}
 				ci->state = EV_CONNECT;

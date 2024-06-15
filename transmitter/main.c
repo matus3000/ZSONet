@@ -460,6 +460,9 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	struct string_builder *sb = alloc_string_builder();
 
 	int rc = 0;
+
+	fprintf(log_file, "main_loop");
+	fflush(log_file);
 	
 	for (int i = 0; i < n; ++i) {
 		cip[i].state = EV_CONNECT;

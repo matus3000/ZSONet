@@ -110,7 +110,8 @@ struct string_builder {
 	int size;
 };
 
-int ci_reopen_socket(struct connection_info *ci);
+int ci_reopen_socket(struct connection_info *ci, struct ring_buf *sq, struct ring_buf *wq);
+
 
 struct ring_buf *rb_allocate(unsigned n) {
 	void * buf = malloc(n  * sizeof(void *));
@@ -222,8 +223,7 @@ int slist_pop(struct list *slist) {
 }
 
 int ci_has_job(struct connection_info *ci) {
-	if (ci->node != NULL) return 1;
-	return 0;
+	return ci->node ? 1 : 0;
 }
 
 void ci_release_job(struct connection_info *ci) {
@@ -493,6 +493,16 @@ void close_aftermath(struct io_uring_cqe *cqe) {
 	free((void *) cqe->user_data);
 }
 
+void move_to_queue(struct connection_info *cip, struct ring_buf *sleeping_queue,
+                   struct ring_buf *waiting_queue)
+{
+	if (ci_has_job(cip)) {
+		rb_add(waiting_queue, cip);
+	} else {
+		rb_add(sleeping_queue, cip);
+	}
+}
+
 void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	void *waiting_queue[n+1];
 	unsigned int submissions = 0;
@@ -532,12 +542,9 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	int continue_loop = 1;
 	int close_cnt = 0;
 	int sched_open_cnt = 0;
-	int open_cnt = 0;
 	int pending = 0;
 	while (1) {
-		fprintf(log_file, "main_loop - main_loop r: %d, w: %d\n",
-			waiting_q->r_offset, waiting_q->w_offset);
-		fflush(log_file);
+		
 
 		unsigned x = io_uring_sq_space_left(ring);
 		int rc;
@@ -545,8 +552,11 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			struct connection_info *ci = rb_pop(waiting_q);
 			switch(ci->state) {
 			case EV_RECONNECT:
-				rc = ci_reopen_socket(ci);
-				if (rc < 0) continue;
+				rc = ci_reopen_socket(ci, sleeping_q, waiting_q);
+				if (rc < 0) {
+					pr_log("main_loop: Could not reopen socket");
+					continue;
+				}
 				ci->state = EV_CONNECT;
 			case EV_CONNECT:
 				rc = add_connect_request(ring, ci);
@@ -586,7 +596,6 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 				{
 					ci->state = EV_CLOSE;
 					rb_add(waiting_q, ci);
-					fprintf(log_file, "main_loop - %s socket to close\n", ci->string_name);
 				}
 				
 			}
@@ -600,6 +609,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 		/* fprintf(stderr, "main_loop - pending %d\n", pending); */
 
 		if (pending == 0) {
+			pr_log("main_loop - pending == 0");
 			continue;
 		}
 		int ret = io_uring_wait_cqe(ring, &cqe);
@@ -628,7 +638,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			++close_cnt;
 			break;
 		default:
-			/* fprintf(stderr, "main_loop - unkonwn event type: %d\n", event); */
+			pr_log("main_loop - unkonwn event type: %d\n", event);
 			break;
 		}
 		fprintf(log_file, "main_loop - io_uring_cqe_seen: %d\n", event);
@@ -672,22 +682,32 @@ err:
 }
 
 
-int ci_reopen_socket(struct connection_info *ci) {
+int ci_reopen_socket(struct connection_info *ci, struct ring_buf *sq, struct ring_buf* wq) {
 	int rc = 0;
 	if (ci->socket >= 0) close(ci->socket);
 	ci->socket = socket(PF_INET, SOCK_STREAM, 0);
 	if (ci->socket < 0) {
 		rc = -1;
 		fprintf(stderr, "%s - socket error %s\n", ci->string_name, strerror(errno));
-	}
+		goto err;
+	} 
 	rc = sockaddr_init(&ci->address, (char *) ci->string_name);
 	if (rc < 0) {
 		close(ci->socket);
 	        ci->socket = -1;
 		fprintf(stderr, "%s - socket error %s\n", ci->string_name, strerror(errno));
+		goto err;
 	}
 
-	return rc;
+	return 0;
+err:
+	if (!ci_has_job(ci)) {
+		pr_log("ci_reopen_socket called for a sokcet without any work, adddr %s", ci->string_name);
+		abort();
+	}
+       	ci_release_job(ci);
+	move_to_queue(ci, sq, wq);
+	
 };
 
 struct connection_info *ci_alloc_and_init_table(unsigned n, char *input_strings[]) {

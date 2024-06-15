@@ -258,8 +258,15 @@ void rb_add(struct ring_buf *rb, struct connection_info *ci) {
 	rb->buf[rb->w_offset++] = ci;
 }
 
-bool rb_empty(struct ring_buf *rb) {
-  return rb->r_offset == rb->w_offset;
+bool rb_empty(struct ring_buf *rb) { return rb->r_offset == rb->w_offset; }
+
+unsigned int rb_count(struct ring_buf *rb) {
+	if (rb->r_offset > rb->w_offset) {
+		return (rb->len - rb->r_offset) + rb->w_offset;
+	} else {
+		return rb->w_offset - rb->r_offset;
+	}
+		
 }
 
 __must_check int add_connect_request(struct io_uring *ring, struct connection_info *cp)
@@ -544,9 +551,12 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	int sched_open_cnt = 0;
 	int pending = 0;
 	while (1) {
-		
-
 		unsigned x = io_uring_sq_space_left(ring);
+		pr_log("main_loop: schedule_read %b, pending %d, close_cnt %d, continue %d, ring_space %d",
+		       schedule_read, pending, close_cnt, continue_loop, x);
+		pr_log("main_loop: sq_r: %d, sq_w: %d, wq_r: %d, wq_s: %d", sleeping_q->r_offset,
+		       sleeping_q->w_offset, waiting_q->r_offset, waiting_q->w_offset);
+
 		int rc;
 		while (x > 0 && !rb_empty(waiting_q)) {
 			struct connection_info *ci = rb_pop(waiting_q);

@@ -132,7 +132,7 @@ void rb_free(struct ring_buf *rb) {
 
 
 
-struct string_builder *alloc_string_builder() {
+struct string_builder *sb_alloc() {
 	char *s = malloc(2048);
 	struct string_builder *sb = malloc(sizeof(struct string_builder));
 	if (sb) {
@@ -148,7 +148,7 @@ struct string_builder *alloc_string_builder() {
 
 
 int sb_append(struct string_builder *sb, char *buff, unsigned len) {
-	pr_log("sb_append len:%d\n", len);
+	pr_log("sb_append off:%d, len:%d\n", sb->offset, len);
 	if (sb->offset + len >= sb->size) {
 		size_t new_size = max(sb->offset + len, sb->size * 2);
 		void * s = realloc(sb->s, new_size);
@@ -159,11 +159,12 @@ int sb_append(struct string_builder *sb, char *buff, unsigned len) {
 	}
 	strncpy(sb->s + sb->offset, buff, len);
 	sb->offset += len;
-	
+	pr_log("sb_append offset:%d after operation\n", sb->offset);
 	return 0;
 }
 
 char *sb_build(struct string_builder *sb, unsigned int *len) {
+	pr_log("sb_append off:%d", sb->offset);
 	unsigned int size = max(sb->offset + 1, 16);
 	char * res = malloc(size);
 	if (!res) {
@@ -173,7 +174,7 @@ char *sb_build(struct string_builder *sb, unsigned int *len) {
 
 	strncpy(res, sb->s, sb->offset);
 	res[sb->offset] = '\0';
-	*len = sb->offset + 1;
+	*len = sb->offset;
 	sb->offset = 0;
 	
 	return res;
@@ -381,18 +382,18 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
 		if (buf[i] == '\n') {
-			sb_append(sb, buf + offset, (i + 1) - offset);
+			sb_append(sb, buf + offset, (i) - offset);
 			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
 			fflush(log_file);
-			unsigned len = 0;
-			char *res = sb_build(sb, &len);
-			fprintf(log_file, "read_aftermath - len: %d, str: %s\n", i, res);
+			unsigned str_len = 0;
+			char *res = sb_build(sb, &str_len);
+			fprintf(log_file, "read_aftermath - str_len: %d, str: %s\n", str_len, res);
 			fflush(log_file);
 			if (!res) {
 				free(rq);
 				return 0;
 			}
-			slist_add(s_list, res, len, n);
+			slist_add(s_list, res, str_len, n);
 			if (!next) next = s_list->tail;
 		} else {
 			sb_append(sb, buf + offset, i - offset); //<i == len
@@ -503,7 +504,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	struct read_buff read_buf = {.length = 0, .size = 2048};
 	struct ring_buf *waiting_q = rb_allocate(n);
 	struct ring_buf *sleeping_q = rb_allocate(n);
-	struct string_builder *sb = alloc_string_builder();
+	struct string_builder *sb = sb_alloc();
 
 	if (!waiting_q) {
 		fprintf(log_file, "main_loop - waiting_q == null\n");

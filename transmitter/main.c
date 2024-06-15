@@ -349,6 +349,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	struct input_node *next = NULL;
 
 	fprintf(log_file, "read_aftermath - cqe->res: %d\n", cqe->res);
+	fflush(log_file);
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
@@ -390,6 +391,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 
 void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq) {
 	fprintf(log_file, "send-aftermath - sent res %d\n", cqe->res);
+	fflush(log_file);
 	struct request *rq = (struct request *) cqe->user_data;
 	
 	if (cqe->res < 0) {
@@ -417,7 +419,8 @@ void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct rin
 	struct request *rq = (struct request *) cqe->user_data;
 
 	fprintf(log_file, "connect_aftermath res %d\n", cqe->res);
-
+	fflush(log_file);
+	
         if (cqe->res < 0) {
 		fprintf(stderr, "%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
 		rq->cp->state = EV_RECONNECT;
@@ -495,6 +498,10 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	int open_cnt = 0;
 	int pending = 0;
 	while (1) {
+		fprintf(log_file, "main_loop - main_loop r: %d, w: %d\n",
+			waiting_q->r_offset, waiting_q->w_offset);
+		fflush(log_file);
+
 		unsigned x = io_uring_sq_space_left(ring);
 		int rc;
 		while (x > 0 && !rb_empty(waiting_q)) {

@@ -391,7 +391,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	unsigned offset = 0;
 	struct input_node *next = NULL;
 
-	fprintf(log_file, "read_aftermath - cqe->res: %d %s", cqe->res, buf);
+	fprintf(log_file, "read_aftermath - cqe->res: %d %.24s", cqe->res, buf);
 	fflush(log_file);
 	
 	while (i < len) {
@@ -400,7 +400,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 			sb_append(sb, buf + offset, (i+1) - offset);
 			unsigned str_len = 0;
 			char *res = sb_build(sb, &str_len);
-			fprintf(log_file, "read_aftermath - str_len: %d, str: %s\n", str_len, res);
+			fprintf(log_file, "read_aftermath - str_len: %d, str: %.24s\n", str_len, res);
 			fflush(log_file);
 			if (!res) {
 				free(rq);
@@ -409,6 +409,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 			slist_add(s_list, res, str_len, n);
 			if (!next) next = s_list->tail;
 		} else {
+			pr_log("read_aftermath sb_append partial i: %d, offse: %d, len: %d", i, offset, len);
 			sb_append(sb, buf + offset, i - offset); //<i == len
 		}
 		offset = i + 1;

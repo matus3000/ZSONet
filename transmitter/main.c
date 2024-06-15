@@ -99,8 +99,9 @@ struct connection_info {
 
 struct ring_buf {
         struct connection_info **buf;
-	unsigned r_offset;
-	unsigned w_offset;
+	int r_offset;
+	int w_offset;
+	bool empty;
 	unsigned len;
 };
 
@@ -123,6 +124,9 @@ struct ring_buf *rb_allocate(unsigned n) {
 	}
 	res->len = n;
 	res->buf = buf;
+	res->r_offset = 0;
+	res->w_offset = 0;
+	res->empty = true;
 	return res;
 }
 
@@ -243,29 +247,33 @@ void ci_release_job(struct connection_info *ci) {
 
 struct connection_info *rb_pop(struct ring_buf *rb) {
 	void *res;
-	if (rb->r_offset == rb->w_offset)
-		fprintf(log_file, "Reading from empty buffer\n");
-        res = rb->buf[rb->r_offset++];
-	if (rb->r_offset >= rb->len){
-	    rb->r_offset -= rb->len;
-	    if (rb->w_offset >= rb->len) rb->w_offset -= rb->len;
-	}
+	if (rb->r_offset == rb->w_offset && rb->empty)
+		pr_log("Writing into a full buffor\n");
+
+	res = rb->buf[rb->r_offset++];
+	if (rb->r_offset >= rb->len)
+		rb->r_offset -= rb->len;
+
+	rb->empty = rb->w_offset == rb->r_offset;
 	return res;
 }
 
 void rb_add(struct ring_buf *rb, struct connection_info *ci) {
-	if (rb->w_offset == rb->len) rb->w_offset = 0;
+	if (rb->w_offset == rb->r_offset && !rb->empty)
+		pr_log("Writing into a full buffor\n");
 	rb->buf[rb->w_offset++] = ci;
+	rb->empty = false;
+	if (rb->w_offset >= rb->len) rb->w_offset -= rb->len;
 }
 
-bool rb_empty(struct ring_buf *rb) { return rb->r_offset == rb->w_offset; }
+bool rb_empty(struct ring_buf *rb) { return rb->empty; }
 
 unsigned int rb_count(struct ring_buf *rb) {
-	if (rb->r_offset > rb->w_offset) {
-		return (rb->len - rb->r_offset) + rb->w_offset;
-	} else {
+	if (rb->r_offset == rb->w_offset)
+		return rb->empty ? 0 : rb->len;
+	if (rb->r_offset < rb->w_offset)
 		return rb->w_offset - rb->r_offset;
-	}
+	return rb->w_offset + rb->len - rb->r_offset;
 		
 }
 

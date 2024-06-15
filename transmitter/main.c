@@ -348,18 +348,20 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	unsigned offset = 0;
 	struct input_node *next = NULL;
 
-	fprintf(log_file, "read_aftermath - cqe->res: %d\n %s", cqe->res, buf);
+	fprintf(log_file, "read_aftermath - cqe->res: %d %s", cqe->res, buf);
 	fflush(log_file);
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
 
-		if (i == '\n') {
+		if (buf[i] == '\n') {
 			sb_append(sb, buf + offset, (i + 1) - offset);
 			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
+			fflush(log_file);
 			unsigned len = 0;
 			char *res = sb_build(sb, &len);
 			fprintf(log_file, "read_aftermath - len: %d, str: %s\n", i, res);
+			fflush(log_file);
 			if (!res) {
 				free(rq);
 				return 0;

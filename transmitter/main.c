@@ -148,6 +148,7 @@ struct string_builder *alloc_string_builder() {
 
 
 int sb_append(struct string_builder *sb, char *buff, unsigned len) {
+	pr_log("sb_append len:%d\n", len);
 	if (sb->offset + len >= sb->size) {
 		size_t new_size = max(sb->offset + len, sb->size * 2);
 		void * s = realloc(sb->s, new_size);
@@ -172,7 +173,7 @@ char *sb_build(struct string_builder *sb, unsigned int *len) {
 
 	strncpy(res, sb->s, sb->offset);
 	res[sb->offset] = '\0';
-	*len = sb->offset;
+	*len = sb->offset + 1;
 	sb->offset = 0;
 	
 	return res;
@@ -394,22 +395,18 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 			slist_add(s_list, res, len, n);
 			if (!next) next = s_list->tail;
 		} else {
-			fprintf(log_file, "read_aftermath - else hit");
-			fflush(log_file);
-			/* sb_append(sb, buf + offset, i - offset); //<i == len */
+			sb_append(sb, buf + offset, i - offset); //<i == len
 		}
 		offset = i + 1;
 		i = i+1;
 		
 	}
 
-	fprintf(log_file, "read_aftermath - waking_up\n");
-	fflush(log_file);
+	pr_log("read_aftermath - waking_up\n");
 	if (next) {
 		while (!rb_empty(sq)) {
 			struct connection_info *ci = rb_pop(sq);
-			fprintf(log_file, "read_aftermath - moving process to waiting queue - state %d\n", ci->state);
-			fflush(stdout);
+			pr_log("read_aftermath - moving process to waiting queue - state %d\n", ci->state);
 			ci->node = next;
 			rb_add(wq, ci);
 		}

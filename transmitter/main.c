@@ -382,9 +382,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
 		if (buf[i] == '\n') {
-			sb_append(sb, buf + offset, (i) - offset);
-			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
-			fflush(log_file);
+			sb_append(sb, buf + offset, (i+1) - offset);
 			unsigned str_len = 0;
 			char *res = sb_build(sb, &str_len);
 			fprintf(log_file, "read_aftermath - str_len: %d, str: %s\n", str_len, res);

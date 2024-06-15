@@ -470,7 +470,8 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	}
 
 	fprintf(log_file, "main_loop - r: %d, w: %d\n", waiting_q->r_offset, waiting_q->w_offset);
-	
+	fflush(log_file);
+
 	bool schedule_read = true;
 	struct io_uring_cqe *cqe;
 	int continue_loop = 1;
@@ -480,7 +481,6 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	int pending = 0;
 	while (1) {
 		unsigned x = io_uring_sq_space_left(ring);
-		/* fprintf(stderr, "main_loop - sq_space_left %d \n", x); */
 		int rc;
 		while (x > 0 && !rb_empty(waiting_q)) {
 			struct connection_info *ci = rb_pop(waiting_q);

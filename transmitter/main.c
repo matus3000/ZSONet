@@ -422,6 +422,7 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 			struct connection_info *ci = rb_pop(sq);
 			pr_log("read_aftermath - moving process to waiting queue - state %d\n", ci->state);
 			ci->node = next;
+			if (!ci->list) ci->list = s_list;
 			rb_add(wq, ci);
 		}
 	}
@@ -478,18 +479,9 @@ void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct rin
 		pr_log("%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
 
 		rq->cp->state = EV_RECONNECT;
-		if (rq->cp->list == slist && ci_has_job(rq->cp)) {
-			//Jesteśmy już po raz drugi w connect,
-			//więc skipujemy linię, dla której nie udało się nam połączyć.
-			ci_release_job(rq->cp);
-		}
+		ci_release_job(rq->cp);
 	} else {
 		rq->cp->state = EV_SEND;
-	}
-
-	if (rq->cp->list != slist) {
-		rq->cp->node = slist->head;
-		rq->cp->list = slist;
 	}
 
 	if (ci_has_job(rq->cp)) {
@@ -548,7 +540,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	
 	for (int i = 0; i < n; ++i) {
 		cip[i].state = EV_CONNECT;
-		rb_add(waiting_q, &cip[i]);
+		rb_add(sleeping_q, &cip[i]);
 	}
 
 	fprintf(log_file, "main_loop - r: %d, w: %d\n", waiting_q->r_offset, waiting_q->w_offset);
@@ -748,6 +740,7 @@ struct connection_info *ci_alloc_and_init_table(unsigned n, char *input_strings[
 		  fprintf(stderr, "%s - socket error %s\n", input_strings[i], strerror(errno));
 		}
 		result[i].string_name = input_strings[i];
+		result[i].list = NULL;
 	}
 
 	return result;

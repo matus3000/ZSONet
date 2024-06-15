@@ -459,8 +459,18 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	struct ring_buf *sleeping_q = rb_allocate(n);
 	struct string_builder *sb = alloc_string_builder();
 
+	if (!waiting_q) {
+		fprintf(log_file, "main_loop - waiting_q == null");
+	}
+	if (!sleeping_q) {
+		fprintf(log_file, "main_loop - sleeping_q == null");
+	}
+	if (!sb) {
+		fprintf(log_file, "main_loop - sb == null");
+	}
+	
 	int rc = 0;
-
+	
 	fprintf(log_file, "main_loop");
 	fflush(log_file);
 	

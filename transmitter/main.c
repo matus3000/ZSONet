@@ -93,6 +93,7 @@ struct connection_info {
 	struct sockaddr_in address;
 	const char *string_name;
 	int state;
+	unsigned sent_bytes;
 	struct input_node *node;
 	struct list       *list;
 };
@@ -237,7 +238,7 @@ void ci_release_job(struct connection_info *ci) {
 	}
 	void *next = ci->node->next;
 	ci->node->pending_sends -= 1;
-	
+	ci->sent_bytes = 0;
 	if (ci->node->pending_sends == 0){
 		slist_pop(ci->list);
 	}
@@ -325,7 +326,7 @@ __must_check int add_close_request(struct io_uring *ring, struct connection_info
 
 __must_check int add_send_request(struct io_uring *ring, struct connection_info *cp)
 {
-	fprintf(log_file, "add_close_request\n");
+	fprintf(log_file, "add_send_request\n");
 	fflush(log_file);
 	
 	struct io_uring_sqe *sqe;
@@ -341,7 +342,10 @@ __must_check int add_send_request(struct io_uring *ring, struct connection_info 
 
 	req->event_type = EV_SEND;
 	req->cp = cp;
-	io_uring_prep_send(sqe, cp->socket, cp->node->input_string, cp->node->len, 0);
+	char *buf = cp->node->input_string + cp->sent_bytes;
+	unsigned len = cp->node->len - cp->sent_bytes;
+	io_uring_prep_send(sqe, cp->socket, buf, len, 0);
+	pr_log("add_send_request - job_len %d, remaing job len: %d", cp->node->len, len);
 	io_uring_sqe_set_data(sqe, req);
 	return 0;
 }
@@ -450,14 +454,21 @@ void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_b
 		rq->cp->state = EV_SEND;
 	}
 
-	ci_release_job(rq->cp);
+	unsigned send_bytes = rq->cp->sent_bytes + cqe->res;
 
-	
+	if (send_bytes == rq->cp->node->len) {
+		ci_release_job(rq->cp);
+	} else if (send_bytes > rq->cp->node->len) {
+		pr_log("send_aftermath - error send_bytes: %d > node->len: %d", send_bytes, rq->cp->node->len);
+		abort();
+	}
+
 	if (ci_has_job(rq->cp)) {
 		rb_add(wq, rq->cp);
 	} else {
 		rb_add(sq, rq->cp);
 	}
+
 
 	fprintf(log_file, "send-aftermath - sent res %d\n", cqe->res);
 	fflush(log_file);
@@ -742,6 +753,7 @@ struct connection_info *ci_alloc_and_init_table(unsigned n, char *input_strings[
 		}
 		result[i].string_name = input_strings[i];
 		result[i].list = NULL;
+		result[i].sent_bytes = 0;
 	}
 
 	return result;

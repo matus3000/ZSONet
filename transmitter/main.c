@@ -452,14 +452,15 @@ void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_b
 		rq->cp->state = EV_RECONNECT;
 	} else if (cqe->res >= 0) {
 		rq->cp->state = EV_SEND;
+		rq->cp->sent_bytes += cqe->res;
 	}
 
-	unsigned send_bytes = rq->cp->sent_bytes + cqe->res;
 
-	if (send_bytes == rq->cp->node->len) {
+	if (rq->cp->sent_bytes == rq->cp->node->len || rq->cp->state == EV_RECONNECT) {
 		ci_release_job(rq->cp);
-	} else if (send_bytes > rq->cp->node->len) {
-		pr_log("send_aftermath - error send_bytes: %d > node->len: %d", send_bytes, rq->cp->node->len);
+	} else if (rq->cp->sent_bytes > rq->cp->node->len) {
+		pr_log("send_aftermath - error send_bytes: %d > node->len: %d", rq->cp->sent_bytes,
+		       rq->cp->node->len);
 		abort();
 	}
 

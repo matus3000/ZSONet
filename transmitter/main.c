@@ -348,13 +348,13 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	unsigned offset = 0;
 	struct input_node *next = NULL;
 
-	fprintf(log_file, "read_aftermath - cqe->res: %d\n", cqe->res);
+	fprintf(log_file, "read_aftermath - cqe->res: %d\n %s", cqe->res, buf);
 	fflush(log_file);
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
 
-		if (i < len) {
+		if (i == '\n') {
 			sb_append(sb, buf + offset, (i + 1) - offset);
 			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
 			unsigned len = 0;
@@ -371,10 +371,11 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 		}
 		offset = i + 1;
 		i = i+1;
+		
 	}
 
 	fprintf(log_file, "read_aftermath - waking_up\n");
-
+	fflush(log_file);
 	if (next) {
 		while (!rb_empty(sq)) {
 			struct connection_info *ci = rb_pop(sq);

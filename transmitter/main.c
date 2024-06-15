@@ -239,7 +239,8 @@ bool rb_empty(struct ring_buf *rb) {
 
 __must_check int add_connect_request(struct io_uring *ring, struct connection_info *cp)
 {
-	/* fprintf(stderr, "add_connect_request\n"); */
+	fprintf(log_file, "add_connect_request\n");
+	fflush(log_file);
 	struct io_uring_sqe *sqe;
 	struct request *req;
 	size_t size = sizeof(struct request);
@@ -262,6 +263,7 @@ __must_check int add_connect_request(struct io_uring *ring, struct connection_in
 __must_check int add_close_request(struct io_uring *ring, struct connection_info *cp)
 {
 	fprintf(log_file, "add_close_request\n");
+	fflush(log_file);
 
 	struct io_uring_sqe *sqe;
 	struct request *req;
@@ -283,6 +285,9 @@ __must_check int add_close_request(struct io_uring *ring, struct connection_info
 
 __must_check int add_send_request(struct io_uring *ring, struct connection_info *cp)
 {
+	fprintf(log_file, "add_close_request\n");
+	fflush(log_file);
+	
 	struct io_uring_sqe *sqe;
 	struct request *req;
 	size_t size = sizeof(struct request);
@@ -460,18 +465,18 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 	struct string_builder *sb = alloc_string_builder();
 
 	if (!waiting_q) {
-		fprintf(log_file, "main_loop - waiting_q == null");
+		fprintf(log_file, "main_loop - waiting_q == null\n");
 	}
 	if (!sleeping_q) {
-		fprintf(log_file, "main_loop - sleeping_q == null");
+		fprintf(log_file, "main_loop - sleeping_q == null\n");
 	}
 	if (!sb) {
-		fprintf(log_file, "main_loop - sb == null");
+		fprintf(log_file, "main_loop - sb == null\n");
 	}
 	
 	int rc = 0;
 	
-	fprintf(log_file, "main_loop");
+	fprintf(log_file, "main_loop\n");
 	fflush(log_file);
 	
 	for (int i = 0; i < n; ++i) {
@@ -559,9 +564,286 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			/* fprintf(stderr, "main-loop - io_uring_wait_cqe < 0 - %d\n", ret); */
 			abort();
 		}
+			fprintf(log_file, "add_close_request\n");
+	fflush(log_file);
+	
+	struct io_uring_sqe *sqe;
+	struct request *req;
+	size_t size = sizeof(struct request);
+	
+	sqe = io_uring_get_sqe(ring);
+	if (!sqe)
+		return -ENOMEM;
+	req = calloc(1, size);
+	if (!req)
+		return -ENOMEM;
+
+	req->event_type = EV_SEND;
+	req->cp = cp;
+	io_uring_prep_send(sqe, cp->socket, cp->node->input_string, cp->node->len, 0);
+	io_uring_sqe_set_data(sqe, req);
+	return 0;
+}
+
+__must_check int add_read_request(struct io_uring *ring, struct read_buff *rbp)
+{
+	struct io_uring_sqe *sqe;
+	struct read_request *req;
+	size_t size = sizeof(struct read_request);
+	
+	sqe = io_uring_get_sqe(ring);
+	if (!sqe)
+		return -ENOMEM;
+	req = calloc(1, size);
+	if (!req)
+		return -ENOMEM;
+
+	req->event_type = EV_READ;
+	req->read_buff = rbp;
+	io_uring_prep_read(sqe, STDIN_FILENO, rbp->buff, 256, 0);
+	io_uring_sqe_set_data(sqe, req);
+	return 0;
+}
+
+int move_to_(struct connection_info *cp, struct list *list)
+{
+}
+
+#define RQ_TYPE(req)                       { *((int *)req) }
+
+int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_builder *sb, int n,
+		   struct ring_buf *sq, struct ring_buf *wq)
+{
+	if (cqe->res < 0  || cqe->res == 0) {
+		free((void *) cqe->user_data);
+		return 0;
+	}
+	//Brak zwolnienia pamięci;
+
+	unsigned len = cqe->res;
+	struct read_request *rq = (struct read_request *) cqe->user_data;
+	char *buf = rq->read_buff->buff;
+	unsigned i = 0;
+	unsigned offset = 0;
+	struct input_node *next = NULL;
+
+	fprintf(log_file, "read_aftermath - cqe->res: %d\n", cqe->res);
+	
+	while (i < len) {
+		for (; buf[i] != '\n' && i < len; ++i);
+
+		if (i < len) {
+			sb_append(sb, buf + offset, (i + 1) - offset);
+			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
+			unsigned len = 0;
+			char *res = sb_build(sb, &len);
+			fprintf(log_file, "read_aftermath - len: %d, str: %s\n", i, res);
+			if (!res) {
+				free(rq);
+				return 0;
+			}
+			slist_add(s_list, res, len, n);
+			if (!next) next = s_list->tail;
+		} else {
+			sb_append(sb, buf + offset, i - offset); //<i == len
+		}
+		offset = i + 1;
+		i = i+1;
+	}
+
+	fprintf(log_file, "read_aftermath - waking_up\n");
+
+	if (next) {
+		while (!rb_empty(sq)) {
+			struct connection_info *ci = rb_pop(sq);
+			fprintf(log_file, "read_aftermath - moving process to waiting queue - state %d\n", ci->state);
+			ci->node = next;
+			rb_add(wq, ci);
+		}
+	}
+	
+	fprintf(log_file, "read_aftermath - freeing\n");
+	free(rq);
+	return 1;
+}
+
+void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq) {
+	fprintf(log_file, "send-aftermath - sent res %d\n", cqe->res);
+	struct request *rq = (struct request *) cqe->user_data;
+	
+	if (cqe->res < 0) {
+		fprintf(stderr, "%s - send error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+		rq->cp->state = EV_RECONNECT;
+	} else if (cqe->res >= 0) {
+		rq->cp->state = EV_SEND;
+	}
+
+	ci_release_job(rq->cp);
+
+	
+	if (ci_has_job(rq->cp)) {
+		rb_add(wq, rq->cp);
+	} else {
+		rb_add(sq, rq->cp);
+	}
+
+	free(rq);
+
+}
+
+void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq, struct list *slist)
+{
+	struct request *rq = (struct request *) cqe->user_data;
+
+	fprintf(log_file, "connect_aftermath res %d\n", cqe->res);
+
+        if (cqe->res < 0) {
+		fprintf(stderr, "%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+		rq->cp->state = EV_RECONNECT;
+		if (rq->cp->list == slist && ci_has_job(rq->cp)) {
+			//Jesteśmy już po raz drugi w connect,
+			//więc skipujemy linię, dla której nie udało się nam połączyć.
+			ci_release_job(rq->cp);
+		}
+	} else {
+		rq->cp->state = EV_SEND;
+	}
+
+	if (rq->cp->list != slist) {
+		rq->cp->node = slist->head;
+		rq->cp->list = slist;
+	}
+
+	if (ci_has_job(rq->cp)) {
+		rb_add(wq, rq->cp);
+	} else {
+		rb_add(sq, rq->cp);
+	}
+
+	free(rq);
+}
+
+void close_aftermath(struct io_uring_cqe *cqe) {
+	if (cqe->res < 0) {
+	  struct request* req = (void *) cqe->user_data;
+	  fprintf(stderr, "%s - close error: %s\n", req->cp->string_name, strerror(-cqe->res));
+	}
+
+	free((void *) cqe->user_data);
+}
+
+void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
+	void *waiting_queue[n+1];
+	unsigned int submissions = 0;
+	waiting_queue[0] = NULL;
+
+	struct list slist = {0,0};
+	struct read_buff read_buf = {.length = 0, .size = 2048};
+	struct ring_buf *waiting_q = rb_allocate(n);
+	struct ring_buf *sleeping_q = rb_allocate(n);
+	struct string_builder *sb = alloc_string_builder();
+
+	if (!waiting_q) {
+		fprintf(log_file, "main_loop - waiting_q == null\n");
+	}
+	if (!sleeping_q) {
+		fprintf(log_file, "main_loop - sleeping_q == null\n");
+	}
+	if (!sb) {
+		fprintf(log_file, "main_loop - sb == null\n");
+	}
+	
+	int rc = 0;
+	
+	fprintf(log_file, "main_loop\n");
+	fflush(log_file);
+	
+	for (int i = 0; i < n; ++i) {
+		cip[i].state = EV_CONNECT;
+		rb_add(waiting_q, &cip[i]);
+	}
+
+	fprintf(log_file, "main_loop - r: %d, w: %d\n", waiting_q->r_offset, waiting_q->w_offset);
+	fflush(log_file);
+
+	bool schedule_read = true;
+	struct io_uring_cqe *cqe;
+	int continue_loop = 1;
+	int close_cnt = 0;
+	int sched_open_cnt = 0;
+	int open_cnt = 0;
+	int pending = 0;
+	while (1) {
+		unsigned x = io_uring_sq_space_left(ring);
+		int rc;
+		while (x > 0 && !rb_empty(waiting_q)) {
+			struct connection_info *ci = rb_pop(waiting_q);
+			switch(ci->state) {
+			case EV_RECONNECT:
+				rc = ci_reopen_socket(ci);
+				if (rc < 0) continue;
+				ci->state = EV_CONNECT;
+			case EV_CONNECT:
+				rc = add_connect_request(ring, ci);
+				break;
+			case EV_SEND:
+				rc = add_send_request(ring, ci);
+				break;
+			case EV_CLOSE:
+				rc = add_close_request(ring, ci);
+				break;
+			}
+			--x;
+			submissions++;
+			pending++;
+		}
+		if (x > 0 && schedule_read) {
+			rc = add_read_request(ring, &read_buf);
+			x--;
+			schedule_read = false;
+			submissions++;
+			fprintf(log_file, "main_loop - scheduling read\n");
+			pending++;
+		}
+
+		if (submissions > 0) {
+			submissions = 0;
+			io_uring_submit(ring);
+		}
+
+		if (!continue_loop) {
+			while (!rb_empty(sleeping_q)){
+				struct connection_info *ci = rb_pop(sleeping_q);
+				if (ci->state == EV_CONNECT || ci->state == EV_RECONNECT)
+				{
+					++close_cnt;
+				} else
+				{
+					ci->state = EV_CLOSE;
+					rb_add(waiting_q, ci);
+					fprintf(log_file, "main_loop - %s socket to close\n", ci->string_name);
+				}
+				
+			}
+			
+			if (close_cnt == n)
+				break;
+			/* else */
+			/* 	fprintf(stderr, "main_loop - close_cnt %d \n", close_cnt); */
+		}
+		
+		/* fprintf(stderr, "main_loop - pending %d\n", pending); */
+
+		if (pending == 0) {
+			continue;
+		}
+		int ret = io_uring_wait_cqe(ring, &cqe);
+		--pending;
+		if (ret < 0) {}
+		fprintf(log_file, "main_loop cqe\n");
+		flush(log_file);
 		struct request *rq = (struct request *) cqe->user_data;
 		int event = RQ_TYPE(rq);
-
 		switch (event) {
 		case EV_READ:
 			continue_loop = read_aftermath(cqe, &slist, sb, n, sleeping_q, waiting_q);

@@ -163,7 +163,7 @@ int sb_append(struct string_builder *sb, char *buff, unsigned len) {
 }
 
 char *sb_build(struct string_builder *sb, unsigned int *len) {
-	unsigned int size = min(sb->offset + 1, 16);
+	unsigned int size = max(sb->offset + 1, 16);
 	char * res = malloc(size);
 	if (!res) {
 	        fprintf(log_file, "sb_build - Could not allocate memory for string of length %d\n", size);
@@ -379,7 +379,6 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
-
 		if (buf[i] == '\n') {
 			sb_append(sb, buf + offset, (i + 1) - offset);
 			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);

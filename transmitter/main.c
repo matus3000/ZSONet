@@ -382,12 +382,14 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 		while (!rb_empty(sq)) {
 			struct connection_info *ci = rb_pop(sq);
 			fprintf(log_file, "read_aftermath - moving process to waiting queue - state %d\n", ci->state);
+			fflush(stdout);
 			ci->node = next;
 			rb_add(wq, ci);
 		}
 	}
 	
 	fprintf(log_file, "read_aftermath - freeing\n");
+	fflush(log_file);
 	free(rq);
 	return 1;
 }

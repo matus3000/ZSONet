@@ -17,7 +17,28 @@
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 
- 
+#define pr_log(s, ...)				\
+  {						\
+    fprintf(log_file, s, ##__VA_ARGS__);	\
+    fflush(log_file);				\
+  }
+
+#define free(x)                                                                \
+  {                                                                            \
+    pr_log("freeing_memory at %p\n", x);                                       \
+    free(x);                                                                   \
+  }
+
+#define calloc(x, y) ({void *r = malloc(x * y); \
+  if (r) memset(r, 0, x*y); \
+  r;\
+  })
+
+#define malloc(x)  ({				\
+      void* r = malloc(x);			\
+      pr_log("malloc(%d) = %p\n", x, r);	\
+      r;					\
+    })
 
 #define __must_check __attribute__((warn_unused_result))
 
@@ -191,10 +212,10 @@ int slist_pop(struct list *slist) {
 	if (old == slist->tail) slist->tail = next;
 	slist->head = next;
 
-	fprintf(log_file, "slist_pop - freeing input_string \n");
-	fflush(log_file);
+        pr_log("slist_pop - freeing input_string \n");
 	free(old->input_string);
 	free(old);
+	pr_log("slist_pop - end \n");
 	return 0;
 }
 
@@ -320,13 +341,14 @@ __must_check int add_read_request(struct io_uring *ring, struct read_buff *rbp)
 	if (!sqe)
 		return -ENOMEM;
 	req = calloc(1, size);
+	fprintf(log_file, "add_read_request - %p", req);
 	if (!req)
 		return -ENOMEM;
 
 	req->event_type = EV_READ;
 	req->read_buff = rbp;
-	io_uring_prep_read(sqe, STDIN_FILENO, rbp->buff, 256, 0);
 	io_uring_sqe_set_data(sqe, req);
+	io_uring_prep_read(sqe, STDIN_FILENO, rbp->buff, 256, -1);
 	return 0;
 }
 
@@ -373,7 +395,9 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 			slist_add(s_list, res, len, n);
 			if (!next) next = s_list->tail;
 		} else {
-			sb_append(sb, buf + offset, i - offset); //<i == len
+			fprintf(log_file, "read_aftermath - else hit");
+			fflush(log_file);
+			/* sb_append(sb, buf + offset, i - offset); //<i == len */
 		}
 		offset = i + 1;
 		i = i+1;
@@ -392,10 +416,10 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 		}
 	}
 	
-	fprintf(log_file, "read_aftermath - freeing\n");
+	fprintf(log_file, "read_aftermath - freeing, %p\n", rq);
 	fflush(log_file);
 
-        free(rq);
+        free((void *)cqe->user_data);
 
 	fprintf(log_file, "read_aftermath - end %d\n", cqe->res);
 	fflush(log_file);
@@ -612,7 +636,7 @@ void main_loop(struct io_uring *ring, struct connection_info* cip, int n) {
 			/* fprintf(stderr, "main_loop - unkonwn event type: %d\n", event); */
 			break;
 		}
-
+		fprintf(log_file, "main_loop - io_uring_cqe_seen: %d\n", event);
 		io_uring_cqe_seen(ring, cqe);
 		
 	}

@@ -6,9 +6,9 @@ CC = gcc
 # Define the source files
 SRCS = main.c
 
-CFLAGS = -luring
+CFLAGS = -luring -g
 
-LDFLAGS = -luring
+LDFLAGS = -luring -g
 
 # Define the output executable name
 TARGET = transmitter

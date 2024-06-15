@@ -467,6 +467,8 @@ void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct rin
 	
         if (cqe->res < 0) {
 		fprintf(stderr, "%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+		pr_log("%s - connect error: %s\n", rq->cp->string_name, strerror(-cqe->res));
+
 		rq->cp->state = EV_RECONNECT;
 		if (rq->cp->list == slist && ci_has_job(rq->cp)) {
 			//Jesteśmy już po raz drugi w connect,
@@ -682,6 +684,7 @@ int sockaddr_init(struct sockaddr_in *sockadrr_in, char *input) {
 
 	if (inet_pton(AF_INET, server_ip, &sockadrr_in->sin_addr) <= 0) {
 		fprintf(stderr, "sockadddr_init - could not resolve name: %s\n", ip);
+		pr_log("sockadddr_init - could not resolve name: %s\n", ip);
 		return  -1;
 	}
 

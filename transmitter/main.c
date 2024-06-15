@@ -17,7 +17,7 @@
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 
-
+ 
 
 #define __must_check __attribute__((warn_unused_result))
 
@@ -191,6 +191,8 @@ int slist_pop(struct list *slist) {
 	if (old == slist->tail) slist->tail = next;
 	slist->head = next;
 
+	fprintf(log_file, "slist_pop - freeing input_string \n");
+	fflush(log_file);
 	free(old->input_string);
 	free(old);
 	return 0;
@@ -308,6 +310,8 @@ __must_check int add_send_request(struct io_uring *ring, struct connection_info 
 
 __must_check int add_read_request(struct io_uring *ring, struct read_buff *rbp)
 {
+	fprintf(log_file, "add_read_request - start");
+	fflush(log_file);
 	struct io_uring_sqe *sqe;
 	struct read_request *req;
 	size_t size = sizeof(struct read_request);
@@ -390,7 +394,11 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	
 	fprintf(log_file, "read_aftermath - freeing\n");
 	fflush(log_file);
-	free(rq);
+
+        free(rq);
+
+	fprintf(log_file, "read_aftermath - end %d\n", cqe->res);
+	fflush(log_file);
 	return 1;
 }
 
@@ -415,8 +423,13 @@ void send_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_b
 		rb_add(sq, rq->cp);
 	}
 
-	free(rq);
+	fprintf(log_file, "send-aftermath - sent res %d\n", cqe->res);
+	fflush(log_file);
 
+        free(rq);
+
+        fprintf(log_file, "send-aftermath - end %d\n", cqe->res);
+	fflush(log_file);
 }
 
 void connect_aftermath(struct io_uring_cqe *cqe, struct ring_buf *wq, struct ring_buf *sq, struct list *slist)

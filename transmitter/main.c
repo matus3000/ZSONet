@@ -347,20 +347,24 @@ int read_aftermath(struct io_uring_cqe *cqe, struct list *s_list, struct string_
 	
 	while (i < len) {
 		for (; buf[i] != '\n' && i < len; ++i);
-		sb_append(sb, buf + offset, (i + 1) - offset);
-		offset = i + 1;
+
 		if (i < len) {
+			sb_append(sb, buf + offset, (i + 1) - offset);
+			fprintf(log_file, "read_aftermath - i: %d, offset %d\n", i, offset);
 			unsigned len = 0;
 			char *res = sb_build(sb, &len);
-			/* fprintf(stderr, "read_aftermath - read string: %s\n, %d\n", res, len); */
+			fprintf(log_file, "read_aftermath - len: %d, str: %s\n", i, res);
 			if (!res) {
 				free(rq);
 				return 0;
 			}
 			slist_add(s_list, res, len, n);
 			if (!next) next = s_list->tail;
-			i++;
+		} else {
+			sb_append(sb, buf + offset, i - offset); //<i == len
 		}
+		offset = i + 1;
+		i = i+1;
 	}
 
 	fprintf(log_file, "read_aftermath - waking_up\n");

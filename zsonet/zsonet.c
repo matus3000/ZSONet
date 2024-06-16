@@ -14,6 +14,7 @@
 
 #include "zsonet.h"
 #include "linux/byteorder/generic.h"
+#include "linux/if_ether.h"
 #include "net/net_debug.h"
 
 #include <linux/spinlock.h>
@@ -51,8 +52,6 @@ struct zsonet_stats {
 	u64 dropped;
 	u64 err;
 };
-
-
 
 struct zsonet {
 	void __iomem		*regview;
@@ -588,13 +587,14 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 	skb_copy_and_csum_dev(skb, tx_buf);
 
-	pr_err("MB - zsonet_start_xmit - ZSONET_WRL(zp, offset, (len << 16)) - %x ", len<<16);
 	spin_lock_irq(&zp->tx_lock);
 	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
 	zp->pending_writes++;
 	
 	wmb();
+	len = max(len, (unsigned int) ETH_ZLEN);
 	ZSONET_WRL(zp, offset, (len << 16));
+	pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d", len, (len << 16));
 	spin_unlock_irq(&zp->tx_lock);
 
 	/* { */

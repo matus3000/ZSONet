@@ -237,7 +237,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 static void zsonet_update_rx_err(struct zsonet *zp) {
 	unsigned int missed = ZSONET_RDL(zp, ZSONET_REG_RX_MISSED);
 	ZSONET_WRL(zp, ZSONET_REG_RX_MISSED, 0);
-	zp->rx_stats.err = missed;
+	zp->dev->stats.rx_missed_errors += missed;
 	
 }
 
@@ -379,7 +379,7 @@ zsonet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 
 	stats->rx_bytes = zp->rx_stats.bytes;
 	stats->rx_packets = zp->rx_stats.packets;
-	stats->rx_errors = zp->rx_stats.err;
+	stats->rx_errors += zp->rx_stats.err;
 	stats->tx_packets = zp->tx_stats.packets;
 	stats->tx_bytes = zp->tx_stats.bytes;
 }

@@ -301,14 +301,14 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 	offset = ZSONET_REG_TX_STATUS_0 + i * 4;
 
 	u32 tx_finshed = ZSONET_RDL(zp, offset);
-	pr_info("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed,
+	pr_log("MB - zsonet_tx_finish - tx_finished = %x, flaga - %d, i - %d", tx_finshed,
 	       tx_finshed & ZSONET_TX_STATUS_TX_FINISHED, i);
 	
 	if (tx_finshed & ZSONET_TX_STATUS_TX_FINISHED)
 	{
 		if (zp->buffer_blk_in_use[i])
 		{
-			pr_info("MB - zsonet_tx_finish - finished job for tx_num: %d", i);
+			pr_log("MB - zsonet_tx_finish - finished job for tx_num: %d", i);
 			zp->tx_stats.packets += 1;
 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 			zp->buffer_blk_in_use[i] = 0;
@@ -316,7 +316,7 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 			/* ZSONET_WRL(zp, offset, 0); */
 		} else {
 			/* ZSONET_WRL(zp, offset, 0); */
-			pr_info("MB - zsonet_tx_finish - empty_bulk: %d", i);
+			pr_log("MB - zsonet_tx_finish - empty_bulk: %d", i);
 		}
 	}
 }
@@ -345,9 +345,9 @@ zsonet_interrupt(int irq, void *dev_instance)
 
 	spin_unlock(&zp->lock);
 	
-	pr_info("MB - zsonet_interrupt - Status %d", status);
+	pr_log("MB - zsonet_interrupt - Status %d", status);
 	if  (status & ZSONET_INTR_TX_OK) {
-		pr_info("MB - zsonet_interrupt - TX - spin_lock_irq");
+		pr_log("MB - zsonet_interrupt - TX - spin_lock_irq");
 		spin_lock(&zp->tx_lock);
 		for (int i = 0; i < 4; ++i) {
 			zsonet_tx_finish(zp, i);
@@ -356,14 +356,14 @@ zsonet_interrupt(int irq, void *dev_instance)
 			netif_wake_queue(zp->dev);
 
 		spin_unlock(&zp->tx_lock);
-		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
+		pr_log("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
 	pr_log("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
 	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
 
 	if (status & ZSONET_INTR_RX_OK) {
-	        pr_info("MB - zsonet_interrupt - rx_lock ");
+	        pr_log("MB - zsonet_interrupt - rx_lock ");
 		spin_lock(&zp->lock);
 		if (napi_schedule_prep(&zp->napi)) {
 			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
@@ -393,7 +393,7 @@ zsonet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 static int
 zsonet_allocate_tx_buffer_blk(struct zsonet *zp) {
 	for (int  i = 0; i < 4; ++i) {
-		pr_info("MB - zsonet_allocate_tx_buffer_blk - allocation rx num %d", i);
+		pr_log("MB - zsonet_allocate_tx_buffer_blk - allocation rx num %d", i);
 		
 		zp->buffer_blk[i] = dma_alloc_coherent(&zp->pdev->dev, TX_BUFF_SIZE,
 						       &zp->buffer_blk_mapping[i], GFP_KERNEL);
@@ -409,7 +409,7 @@ static void
 zsonet_free_tx_buffer_blk(struct zsonet *zp) {
 	for (int  i = 0; i < 4; ++i) {
 		if (zp->buffer_blk[i]){
-			pr_info("MB - zsonet_free_tx_buffer - %d", i);
+			pr_log("MB - zsonet_free_tx_buffer - %d", i);
 			
 			dma_free_coherent(&zp->pdev->dev, TX_BUFF_SIZE,
 					  zp->buffer_blk[i], zp->buffer_blk_mapping[i]);
@@ -421,7 +421,7 @@ zsonet_free_tx_buffer_blk(struct zsonet *zp) {
 static int
 zsonet_allocate_rx_buffer_blk(struct zsonet *zp)
 {
-	pr_info("MB - zsonet_allocate_rx_buffer - allocation rx num");
+	pr_log("MB - zsonet_allocate_rx_buffer - allocation rx num");
 	zp->rx_buffer = dma_alloc_coherent(&zp->pdev->dev, RX_BUFF_SIZE, &zp->rx_buffer_mapping, GFP_KERNEL);
 	if (!zp->rx_buffer)
 		return -ENOMEM;
@@ -432,7 +432,7 @@ zsonet_allocate_rx_buffer_blk(struct zsonet *zp)
 static void
 zsonet_free_rx_buffer(struct zsonet *zp) {
 	if (zp->rx_buffer) {
-		pr_info("MB - zsonet_free_rx_buffer");
+		pr_log("MB - zsonet_free_rx_buffer");
 			
 		dma_free_coherent(&zp->pdev->dev, RX_BUFF_SIZE,
 				  zp->rx_buffer, zp->rx_buffer_mapping);
@@ -478,7 +478,7 @@ zsonet_request_irq(struct zsonet *zp)
 	unsigned long flags = 0;
 	irq_num = irq;
 
-	pr_info("MB - zsonet_request_irq - dev_name %s - irq %d", zp->dev->name, irq);
+	pr_log("MB - zsonet_request_irq - dev_name %s - irq %d", zp->dev->name, irq);
 	
 	rc = request_irq(irq, zsonet_interrupt, flags, zp->dev->name, zp->dev);
 	if (!rc)
@@ -490,7 +490,7 @@ static void
 zsonet_free_irq(struct zsonet *zp)
 {
 	if (zp->irq_requested) {
-		pr_info("MB - zsonet_free_irq");
+		pr_log("MB - zsonet_free_irq");
 		free_irq(zp->pdev->irq, zp->dev);
 	}
 }

@@ -76,7 +76,7 @@ struct zsonet {
 	
 	u8			mac_addr[8];
 	u8                      irq_requested;
-	struct napi_struct	napi;
+	/* struct napi_struct	napi; */
 	
 	struct zsonet_stats     rx_stats;
 	struct zsonet_stats     tx_stats;

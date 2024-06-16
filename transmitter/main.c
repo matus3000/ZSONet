@@ -42,7 +42,7 @@
 
 #define __must_check __attribute__((warn_unused_result))
 
-#define QUEUE_DEPTH 1
+
 #define BLOCK_SZ    1024
 #define MAX_HOST_NAME 1024
 
@@ -773,7 +773,9 @@ int main(int argc, const char *argv[]) {
 
 	struct io_uring ring;
 
-	io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
+	int queue_depth = min(argc+1, 32);
+
+	io_uring_queue_init(queue_depth, &ring, 0);
 	struct connection_info* ci_table = ci_alloc_and_init_table(argc -1, (char **) &argv[1]);
 
 	if (!ci_table) goto uring_exit;

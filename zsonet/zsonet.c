@@ -234,7 +234,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 
 	print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - Frame contents: ",
 		       DUMP_PREFIX_OFFSET, 16, 1,
-		       &zp->rx_buffer + 4, 70, true);	
+		       &zp->rx_buffer + pos, 70, true);	
 	
 	skb_read_from_cyclic_buffer(skb, zp->rx_buffer, pos, RX_BUFF_SIZE, data_len);
 

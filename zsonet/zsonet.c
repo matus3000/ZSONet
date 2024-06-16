@@ -15,6 +15,7 @@
 #include "zsonet.h"
 #include "linux/byteorder/generic.h"
 #include "linux/if_ether.h"
+#include "linux/socket.h"
 #include "net/net_debug.h"
 
 #include <linux/spinlock.h>
@@ -183,6 +184,21 @@ static void read_from_cyclic_buffer(void *dest, const void *buff,
 	}
 }
 
+static void skb_read_from_cyclic_buffer(struct sk_buff *skb, const void *buff,
+                                    unsigned int offset, unsigned int len,
+                                    unsigned int size)
+{
+
+	int left = len - offset;
+	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
+	if (left >= size) {
+	        skb_copy_to_linear_data(skb, buff+offset, size);
+	} else {
+		skb_copy_to_linear_data(skb, buff+offset, left);
+	        skb_copy_to_linear_data_offset(skb, left, buff, size-left);
+	}
+}
+
 static int zsonet_read_one(struct zsonet *zp) {
 
 	unsigned int pos, data_len;
@@ -216,15 +232,26 @@ static int zsonet_read_one(struct zsonet *zp) {
 	
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
-	read_from_cyclic_buffer(skb->data, zp->rx_buffer, zp->rx_buffer_position, RX_BUFF_SIZE, data_len);
+
+	print_hex_dump(KERN_DEBUG, "MB - Frame contents: ",
+		       DUMP_PREFIX_OFFSET, 16, 1,
+		       &zp->rx_buffer + 4, 70, true);	
+	
+	skb_read_from_cyclic_buffer(skb, zp->rx_buffer, pos, RX_BUFF_SIZE, data_len);
 
 	pos += data_len;
 	if (pos >= RX_BUFF_SIZE)
 		pos -= RX_BUFF_SIZE;
 	zp->rx_buffer_position = pos;
-	
+
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
+
+	print_hex_dump(KERN_DEBUG, "MB - skb: ",
+		       DUMP_PREFIX_OFFSET, 16, 1,
+		       skb->data, 70, true);	
+	
+	pr_err("MB - zsonet_read_one - buffer log of size:%d with skb->len: %d", data_len, skb->len);
         netif_receive_skb(skb);
 
 	zp->rx_stats.packets += 1;
@@ -616,10 +643,10 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	wmb();
 	len = max(len, (unsigned int) ETH_ZLEN);
 	ZSONET_WRL(zp, offset, (len << 16));
-	pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16));
-	pr_err("MB - zsonet_start_xmit - buffer ");
-	char *log_buf = tx_buf;
-	log_buffer(log_buf, len);
+	/* pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16)); */
+	/* pr_err("MB - zsonet_start_xmit - buffer "); */
+	/* char *log_buf = tx_buf; */
+	/* log_buffer(log_buf, len); */
 	
 	spin_unlock_irq(&zp->tx_lock);
 

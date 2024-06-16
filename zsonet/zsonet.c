@@ -239,28 +239,28 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
 	
-	if (work_done < budget) {
-		unsigned long flags;
-		spin_lock_irqsave(&zp->lock, flags);
-		if (napi_complete_done(&zp->napi, work_done)) {
-			pr_log("MB - zsonet_rx_poll - rearming interrupts");
-			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
-		}
-		spin_unlock_irqrestore(&zp->lock, flags);
-	}
+	/* if (work_done < budget) { */
+	/* 	unsigned long flags; */
+	/* 	spin_lock_irqsave(&zp->lock, flags); */
+	/* 	if (napi_complete_done(&zp->napi, work_done)) { */
+	/* 		pr_log("MB - zsonet_rx_poll - rearming interrupts"); */
+	/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK); */
+	/* 	} */
+	/* 	spin_unlock_irqrestore(&zp->lock, flags); */
+	/* } */
 
 	spin_unlock(&zp->rx_lock);
 
 	return work_done;
 }
 
-static int zsonet_poll(struct napi_struct *napi, int budget) {
-	struct zsonet *zp = container_of(napi, struct zsonet, napi);
-	int res = 0;
+/* static int zsonet_poll(struct napi_struct *napi, int budget) { */
+/* 	struct zsonet *zp = container_of(napi, struct zsonet, napi); */
+/* 	int res = 0; */
 
-	res = zsonet_rx_poll(zp, budget);
-	return res;
-}
+/* 	res = zsonet_rx_poll(zp, budget); */
+/* 	return res; */
+/* } */
 
 
 static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
@@ -329,13 +329,14 @@ zsonet_interrupt(int irq, void *dev_instance)
 
 	if (status & ZSONET_INTR_RX_OK) {
 	        pr_log("MB - zsonet_interrupt - rx_lock ");
-		spin_lock(&zp->lock);
-		if (napi_schedule_prep(&zp->napi)) {
-			pr_log("MB - zsonet_interrupt -Disarming interrupt");
-			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
-			__napi_schedule(&zp->napi);
-		}
-		spin_unlock(&zp->lock);
+		zsonet_rx_poll(zp, 0xffff);
+		/* spin_lock(&zp->lock); */
+		/* if (napi_schedule_prep(&zp->napi)) { */
+		/* 	pr_log("MB - zsonet_interrupt -Disarming interrupt"); */
+		/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK); */
+		/* 	__napi_schedule(&zp->napi); */
+		/* } */
+		/* spin_unlock(&zp->lock); */
 	}
 
 	return IRQ_HANDLED;
@@ -470,10 +471,10 @@ zsonet_open(struct net_device *dev)
 	pr_log("MB - zsonet_open - netif_carrier_off");
 	netif_carrier_off(dev);
 
-	pr_log("MB - zsonet_open - zsonet_init_napi");
-	zsonet_init_napi(zp);
-	pr_log("MB - zsonet_open - zsonet_napi_enable");
-	napi_enable(&zp->napi);
+	/* pr_log("MB - zsonet_open - zsonet_init_napi"); */
+	/* zsonet_init_napi(zp); */
+	/* pr_log("MB - zsonet_open - zsonet_napi_enable"); */
+	/* napi_enable(&zp->napi); */
 
 	pr_log("MB - zsonet_open - zsonet_alloc_mem");
 	rc = zsonet_alloc_mem(zp);
@@ -509,8 +510,8 @@ zsonet_close(struct net_device *dev){
 
 	pr_log("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
-	pr_log("MB - zsonet_close - napi_disable");
-	napi_disable(&zp->napi);
+	/* pr_log("MB - zsonet_close - napi_disable"); */
+	/* napi_disable(&zp->napi); */
 
 	pr_log("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
@@ -746,7 +747,7 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_free;
 
 	dev->netdev_ops = &zsonet_netdev_ops;
-	netif_napi_add(dev, &zp->napi, zsonet_poll);
+	/* netif_napi_add(dev, &zp->napi, zsonet_poll); */
 
 	pr_log("MB - zso_init_one - pci_set_drvdata\n");
 	pci_set_drvdata(pdev, dev);

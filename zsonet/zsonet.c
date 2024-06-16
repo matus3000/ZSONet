@@ -41,7 +41,7 @@ MODULE_LICENSE("GPL");
 
 
 
-#define pr_log(x, ...) pr_debug(x, ##__VA_ARGS__)
+#define pr_log(x, ...) pr_info(x, ##__VA_ARGS__)
 
 
 

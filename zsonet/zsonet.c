@@ -232,9 +232,9 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 
-	print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - Frame contents: ",
-		       DUMP_PREFIX_OFFSET, 16, 1,
-		       &zp->rx_buffer + pos, 70, true);	
+	/* print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - Frame contents: ", */
+	/* 	       DUMP_PREFIX_OFFSET, 16, 1, */
+	/* 	       &zp->rx_buffer + pos, 70, true);	 */
 	
 	skb_read_from_cyclic_buffer(skb, zp->rx_buffer, pos, RX_BUFF_SIZE, data_len);
 
@@ -246,9 +246,9 @@ static int zsonet_read_one(struct zsonet *zp) {
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 
-	print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - skb: ",
-		       DUMP_PREFIX_OFFSET, 16, 1,
-		       skb->data, 70, true);	
+	/* print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - skb: ", */
+	/* 	       DUMP_PREFIX_OFFSET, 16, 1, */
+	/* 	       skb->data, 70, true);	 */
 	
 	pr_err("MB - zsonet_read_one - buffer log of size:%d with skb->len: %d", data_len, skb->len);
         netif_receive_skb(skb);

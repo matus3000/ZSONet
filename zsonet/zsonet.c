@@ -268,7 +268,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);
 	  if (napi_complete_done(&zp->napi, work_done)) {
-		  pr_log("MB - zsonet_rx_poll - rearming interrupts");
+		  pr_log_sp("MB - zsonet_rx_poll - rearming interrupts");
 		  ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
 	  }
 	  spin_unlock_irqrestore(&zp->lock, flags);
@@ -359,6 +359,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	        pr_log("MB - zsonet_interrupt - rx_lock ");
 		spin_lock(&zp->lock);
 		if (napi_schedule_prep(&zp->napi)) {
+			pr_log_sp("MB - zsonet_interrupt -Disarming interrupt");
 			ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK);
 			__napi_schedule(&zp->napi);
 		}

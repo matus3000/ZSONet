@@ -181,7 +181,8 @@ static int zsonet_read_one(struct zsonet *zp) {
 	}
 
 
-	skb = napi_alloc_skb(&zp->napi, data_len);
+	/* skb = napi_alloc_skb(&zp->napi, data_len); */
+	skb = alloc_skb(data_len, GFP_KERNEL);
 	if (unlikely(!skb)) {
 		pr_log("MB - zsonet_read_one - dropping packet because of memory allocation");
 		zp->dev->stats.rx_dropped += 1;

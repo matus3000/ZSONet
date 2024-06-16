@@ -41,7 +41,7 @@ MODULE_LICENSE("GPL");
 
 
 
-#define pr_log(x, ...) 
+#define pr_log(x, ...) pr_debug(x, ##__VA_ARGS__)
 
 
 
@@ -810,7 +810,7 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto error;
 	}
 
-	netdev_info(dev, "MB - zso_init_one - success");
+	pr_log("MB - zso_init_one - success");
 	return 0;
 error:
 	pr_log("MB - zso_init_one - error");

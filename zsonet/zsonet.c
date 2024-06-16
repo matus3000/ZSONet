@@ -39,6 +39,28 @@ MODULE_AUTHOR("Mateusz Bodziony <mb394086>");
 MODULE_DESCRIPTION("Zsonet Driver");
 MODULE_LICENSE("GPL");
 
+
+
+
+
+#define _pr_log(x, ...) pr_err(x, ##__VA_ARGS__)
+
+#define log_buffer(x, len) { \
+        _pr_log("log_buffer - leading bytes: ");           \
+        for (int _i = 0; _i < len && _i < 8; ++_i) {       \
+            _pr_log("%x ", x[_i]);                      \
+                }                                       \
+        _pr_log("trailing bytes: ");                       \
+        for (int _i = 1; len - _i > 0 && _i < 9; ++_i) {   \
+            _pr_log("%x ", x[len -_i]);                 \
+        }                                               \
+    }
+
+
+
+
+
+
 static const struct pci_device_id zsonet_pci_tbl[] = {
 	{PCI_VENDOR_ID_ZSONET, PCI_DEVICE_ID_ZSONET,
 	 PCI_ANY_ID, PCI_ANY_ID, 0, 0}
@@ -594,7 +616,11 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	wmb();
 	len = max(len, (unsigned int) ETH_ZLEN);
 	ZSONET_WRL(zp, offset, (len << 16));
-	pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d", len, (len << 16));
+	pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16));
+	pr_err("MB - zsonet_start_xmit - buffer ");
+	char *log_buf = tx_buf;
+	log_buffer(log_buf, len);
+	
 	spin_unlock_irq(&zp->tx_lock);
 
 	/* { */

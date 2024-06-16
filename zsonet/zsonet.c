@@ -430,11 +430,9 @@ alloc_mem_err:
 }
 
 
-static void zsonet_init_napi(struct zsonet *zp)
-{
-}
-
-
+/* static void zsonet_init_napi(struct zsonet *zp) */
+/* { */
+/* } */
 
 
 static int

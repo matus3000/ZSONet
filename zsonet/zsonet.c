@@ -193,7 +193,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
         data_len = data_len & 0xffff;
-	pr_log_sp("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
+	/* pr_log_sp("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len); */
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->dev->stats.rx_dropped++;
@@ -250,11 +250,11 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	if (!budget) return 0;
 
 	spin_lock(&zp->rx_lock);
+	pr_log_sp("MB - zsonet_rx_poll, rx_read_pos %d, rx_write_pos %d",
+			  (u32) zp->rx_buffer_position, write_position);
 	while (zp->rx_buffer_position != write_position) {
 		work_done += zsonet_read_one(zp);
 		write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
-		pr_log_sp("MB - zsonet_rx_poll, rx_read_pos %d, rx_write_pos %d",
-			  (u32) zp->rx_buffer_position, write_position);
 		if (work_done == budget)
 			break;
 	}

@@ -41,8 +41,9 @@ MODULE_LICENSE("GPL");
 
 
 
-#define pr_log(x, ...) pr_info(x, ##__VA_ARGS__)
+#define pr_log(x, ...) 
 
+#define pr_log_sp(x, ...) pr_info(x, ##__VA_ARGS__)
 
 
 static const struct pci_device_id zsonet_pci_tbl[] = {
@@ -192,7 +193,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
         data_len = data_len & 0xffff;
-	pr_log("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
+	pr_log_sp("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->dev->stats.rx_dropped++;
@@ -217,12 +218,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 
-	/* print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - Frame contents: ", */
-	/* 	       DUMP_PREFIX_OFFSET, 16, 1, */
-	/* 	       &zp->rx_buffer + pos, 70, true);	 */
-	
-	skb_read_from_cyclic_buffer(skb, zp->rx_buffer, pos, RX_BUFF_SIZE, data_len);
-
+        skb_read_from_cyclic_buffer(skb, zp->rx_buffer, pos, RX_BUFF_SIZE, data_len);
 	pos += data_len;
 	if (pos >= RX_BUFF_SIZE)
 		pos -= RX_BUFF_SIZE;
@@ -231,11 +227,6 @@ static int zsonet_read_one(struct zsonet *zp) {
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 
-	/* print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - skb: ", */
-	/* 	       DUMP_PREFIX_OFFSET, 16, 1, */
-	/* 	       skb->data, 70, true);	 */
-	
-	pr_log("MB - zsonet_read_one - buffer log of size:%d with skb->len: %d", data_len, skb->len);
         netif_receive_skb(skb);
 
 	zp->rx_stats.packets += 1;
@@ -262,6 +253,8 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	while (zp->rx_buffer_position != write_position) {
 		work_done += zsonet_read_one(zp);
 		write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
+		pr_log_sp("MB - zsonet_rx_poll, rx_read_pos %d, rx_write_pos %d",
+			  (u32) zp->rx_buffer_position, write_position);
 		if (work_done == budget)
 			break;
 	}

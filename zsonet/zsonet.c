@@ -89,6 +89,8 @@ static void zsonet_setup_buffers(struct zsonet *zp) {
 	
 	for (int i = 0, offset = ZSONET_REG_TX_BUF_0; i < 4; ++i, offset += 4) {
 		unsigned int val = *(unsigned int*) &zp->buffer_blk_mapping[i];
+		pr_err("MB - zsonet_setup_buffer - setting up buffer %d to %lld = %d", i, zp->buffer_blk_mapping[i],
+		       val);
 		ZSONET_WRL(zp, offset, val);
 	}
 	dev_addr = zp->rx_buffer_mapping;

@@ -550,7 +550,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto free_skb;
 	}
 
-	spin_lock_irq(&zp->tx_lock);
+	unsigned long flags;
+	spin_lock_irqsave(&zp->tx_lock, flags);
 
 	pos = zp->tx_buffer_index;
 	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
@@ -573,7 +574,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		zp->tx_buffer_index += 1;
 		if (zp->tx_buffer_index >= 4) zp->tx_buffer_index = 0;
 	}
-	spin_unlock_irq(&zp->tx_lock);
+	spin_unlock_irqrestore(&zp->tx_lock, flags);
 
 	if (!tx_buf) {
 		pr_log("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
@@ -588,7 +589,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 	skb_copy_and_csum_dev(skb, tx_buf);
 
-	spin_lock_irq(&zp->tx_lock);
+	spin_lock_irqsave(&zp->tx_lock, flags);
 	zp->buffer_blk_in_use[pos] = max(len, (unsigned int) ETH_ZLEN);
 	zp->pending_writes++;
 	
@@ -600,7 +601,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* char *log_buf = tx_buf; */
 	/* log_buffer(log_buf, len); */
 	
-	spin_unlock_irq(&zp->tx_lock);
+	spin_unlock_irqrestore(&zp->tx_lock, flags);
 
 	/* { */
 	/* 	spin_lock_irq(&zp->lock); */

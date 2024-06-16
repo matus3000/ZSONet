@@ -168,20 +168,20 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 	return result;
 }
 
-static void read_from_cyclic_buffer(void *dest, const void *buff,
-                                    unsigned int offset, unsigned int len,
-                                    unsigned int size)
-{
+/* static void read_from_cyclic_buffer(void *dest, const void *buff, */
+/*                                     unsigned int offset, unsigned int len, */
+/*                                     unsigned int size) */
+/* { */
 
-	int left = len - offset;
-	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
-	if (left >= size) {
-		memcpy(dest, buff+offset, size);
-	} else {
-		memcpy(dest, buff+offset, left);
-		memcpy(dest + left, buff, size - left);
-	}
-}
+/* 	int left = len - offset; */
+/* 	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size); */
+/* 	if (left >= size) { */
+/* 		memcpy(dest, buff+offset, size); */
+/* 	} else { */
+/* 		memcpy(dest, buff+offset, left); */
+/* 		memcpy(dest + left, buff, size - left); */
+/* 	} */
+/* } */
 
 static void skb_read_from_cyclic_buffer(struct sk_buff *skb, const void *buff,
                                     unsigned int offset, unsigned int len,

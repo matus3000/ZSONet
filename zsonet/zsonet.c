@@ -232,7 +232,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	pos = pos + 4;
 	if (pos >= RX_BUFF_SIZE) pos -= RX_BUFF_SIZE;
 
-	print_hex_dump(KERN_DEBUG, "MB - Frame contents: ",
+	print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - Frame contents: ",
 		       DUMP_PREFIX_OFFSET, 16, 1,
 		       &zp->rx_buffer + 4, 70, true);	
 	
@@ -246,7 +246,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 
-	print_hex_dump(KERN_DEBUG, "MB - skb: ",
+	print_hex_dump(KERN_DEBUG, "MB - zsonet_read_one - skb: ",
 		       DUMP_PREFIX_OFFSET, 16, 1,
 		       skb->data, 70, true);	
 	

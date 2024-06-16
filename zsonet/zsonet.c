@@ -41,23 +41,7 @@ MODULE_LICENSE("GPL");
 
 
 
-
-
-#define _pr_log(x, ...) pr_err(x, ##__VA_ARGS__)
-
-#define log_buffer(x, len) { \
-        _pr_log("log_buffer - leading bytes: ");           \
-        for (int _i = 0; _i < len && _i < 8; ++_i) {       \
-            _pr_log("%x ", x[_i]);                      \
-                }                                       \
-        _pr_log("trailing bytes: ");                       \
-        for (int _i = 1; len - _i > 0 && _i < 9; ++_i) {   \
-            _pr_log("%x ", x[len -_i]);                 \
-        }                                               \
-    }
-
-
-
+#define pr_log(x, ...) pr_debug(x, ##__VA_ARGS__)
 
 
 
@@ -105,12 +89,12 @@ struct zsonet {
 };
 
 static void zsonet_setup_buffers(struct zsonet *zp) {
-	pr_err("MB - zsonet_setup_buffers");
+	pr_log("MB - zsonet_setup_buffers");
 	unsigned int dev_addr;
 	
 	for (int i = 0, offset = ZSONET_REG_TX_BUF_0; i < 4; ++i, offset += 4) {
 		unsigned int val = *(unsigned int*) &zp->buffer_blk_mapping[i];
-		pr_err("MB - zsonet_setup_buffer - setting up buffer %d to %lld = %d", i, zp->buffer_blk_mapping[i],
+		pr_log("MB - zsonet_setup_buffer - setting up buffer %d to %lld = %d", i, zp->buffer_blk_mapping[i],
 		       val);
 		ZSONET_WRL(zp, offset, val);
 	}
@@ -131,18 +115,18 @@ zsonet_prepare_device(struct zsonet *zp)
 {
 	u32 mask = 0, enabled = 0;
 	if ((mask = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) || (enabled = ZSONET_RDL(zp, ZSONET_REG_ENABLED))){
-		pr_err("MB - zsonet_prepare_device - was not turned off mask=%d, enabled = %d", mask, enabled);
+		pr_log("MB - zsonet_prepare_device - was not turned off mask=%d, enabled = %d", mask, enabled);
 		zsonet_stop_device(zp);
 		wmb();
 	}
   
-	pr_err("MB - zsonet_prepare_device");
+	pr_log("MB - zsonet_prepare_device");
 	zsonet_setup_buffers(zp);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ~0);
 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_RX_OK | ZSONET_INTR_TX_OK);
 	ZSONET_WRL(zp, ZSONET_REG_ENABLED, 1);
 
-	pr_err("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
+	pr_log("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
 	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
 }
 
@@ -151,7 +135,8 @@ zsonet_prepare_device(struct zsonet *zp)
 static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
                                              unsigned int len)
 {
-	/* pr_err("MB - readl_from_cyclic_buffer offset %d", offset); */
+	
+	/* pr_log("MB - readl_from_cyclic_buffer offset %d", offset); */
 	unsigned int result = 0;
 	if (len - offset >= 4) {
 		result = *(unsigned int *) (buff + offset);
@@ -164,7 +149,7 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 		}
 		memcpy(rr, buff, 4 - left);
 	}
-	/* pr_err("MB - readl_from_cyclic_buffer - result %d", result); */
+	/* pr_log("MB - readl_from_cyclic_buffer - result %d", result); */
 	return result;
 }
 
@@ -174,7 +159,7 @@ static unsigned int readl_from_cyclic_buffer(void *buff, unsigned int offset,
 /* { */
 
 /* 	int left = len - offset; */
-/* 	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size); */
+/* 	pr_log("MB - readl_from_cyclic_buffer - left %d - size %d", left, size); */
 /* 	if (left >= size) { */
 /* 		memcpy(dest, buff+offset, size); */
 /* 	} else { */
@@ -189,7 +174,7 @@ static void skb_read_from_cyclic_buffer(struct sk_buff *skb, const void *buff,
 {
 
 	int left = len - offset;
-	pr_err("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
+	pr_log("MB - readl_from_cyclic_buffer - left %d - size %d", left, size);
 	if (left >= size) {
 	        skb_copy_to_linear_data(skb, buff+offset, size);
 	} else {
@@ -207,21 +192,21 @@ static int zsonet_read_one(struct zsonet *zp) {
 	unsigned int z = readl_from_cyclic_buffer(zp->rx_buffer, pos, RX_BUFF_SIZE);
 	data_len = le32_to_cpu(z);
         data_len = data_len & 0xffff;
-	pr_err("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
+	pr_log("MB - zsonet_read_one - z:%d, data_len:%d", z, data_len);
 
 	if (data_len > RX_BUFF_SIZE) {
 		zp->dev->stats.rx_dropped++;
 		/// Device is in an unknown state so it's easiest to assume we need to start
 		/// reading from write_offset
 		zp->rx_buffer_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET); 
-		pr_err("MB - zsonet_read_one - data_len greater than buffer size");
+		pr_log("MB - zsonet_read_one - data_len greater than buffer size");
 		return 1;
 	}
 
 
 	skb = napi_alloc_skb(&zp->napi, data_len);
 	if (!skb) {
-		pr_err("MB - zsonet_read_one - dropping packet");
+		pr_log("MB - zsonet_read_one - dropping packet");
 		zp->dev->stats.rx_dropped += 1;
 		zp->rx_buffer_position += data_len + 4;
 		if (zp->rx_buffer_position >= RX_BUFF_SIZE) zp->rx_buffer_position -= RX_BUFF_SIZE;
@@ -250,7 +235,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	/* 	       DUMP_PREFIX_OFFSET, 16, 1, */
 	/* 	       skb->data, 70, true);	 */
 	
-	pr_err("MB - zsonet_read_one - buffer log of size:%d with skb->len: %d", data_len, skb->len);
+	pr_log("MB - zsonet_read_one - buffer log of size:%d with skb->len: %d", data_len, skb->len);
         netif_receive_skb(skb);
 
 	zp->rx_stats.packets += 1;
@@ -269,7 +254,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 {
 	int work_done = 0;
 	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
-	pr_err("MB - zsonet_rx_poll - budget %d, write_position: %d", budget, write_position);
+	pr_log("MB - zsonet_rx_poll - budget %d, write_position: %d", budget, write_position);
 	
 	if (!budget) return 0;
 
@@ -282,15 +267,15 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	}
 	zsonet_update_rx_err(zp);
 
-	pr_err("MB - zsonet_rx_poll - work_done %d, rx_read_pos %d, rx_write_pos %d", work_done, (u32) zp->rx_buffer_position, write_position);
+	pr_log("MB - zsonet_rx_poll - work_done %d, rx_read_pos %d, rx_write_pos %d", work_done, (u32) zp->rx_buffer_position, write_position);
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
-	pr_err("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
+	pr_log("MB - zsonet_rx_poll  - buf read offset %d", ZSONET_RDL(zp, ZSONET_REG_RX_BUF_READ_OFFSET));
 
 	if (work_done < budget) {
 	  unsigned long flags;
 	  spin_lock_irqsave(&zp->lock, flags);
 	  if (napi_complete_done(&zp->napi, work_done)) {
-		  pr_err("MB - zsonet_rx_poll - rearming interrupts");
+		  pr_log("MB - zsonet_rx_poll - rearming interrupts");
 		  ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
 	  }
 	  spin_unlock_irqrestore(&zp->lock, flags);
@@ -340,7 +325,7 @@ static irqreturn_t
 zsonet_interrupt(int irq, void *dev_instance)
 {
 	if (irq != irq_num) {
-		pr_err("MB - irq is not for this device irq %d", irq);
+		pr_log("MB - irq is not for this device irq %d", irq);
 		return IRQ_NONE;
 	}
 
@@ -355,7 +340,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
 	wmb(); rmb();
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
-	pr_err("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status,
+	pr_log("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status,
 	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS), ZSONET_RDL(zp, ZSONET_REG_INTR_MASK));
 
 	spin_unlock(&zp->lock);
@@ -374,7 +359,7 @@ zsonet_interrupt(int irq, void *dev_instance)
 		pr_info("MB - zsonet_interrupt - spin_unlock_irq ");
 	}
 
-	pr_err("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
+	pr_log("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
 	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
 
 	if (status & ZSONET_INTR_RX_OK) {
@@ -516,37 +501,37 @@ zsonet_open(struct net_device *dev)
 	int rc;
 	struct zsonet *zp = netdev_priv(dev);
 
-	pr_err("MB - zsonet_open - netif_carrier_off");
+	pr_log("MB - zsonet_open - netif_carrier_off");
 	netif_carrier_off(dev);
 
-	pr_err("MB - zsonet_open - zsonet_init_napi");
+	pr_log("MB - zsonet_open - zsonet_init_napi");
 	zsonet_init_napi(zp);
-	pr_err("MB - zsonet_open - zsonet_napi_enable");
+	pr_log("MB - zsonet_open - zsonet_napi_enable");
 	napi_enable(&zp->napi);
 
-	pr_err("MB - zsonet_open - zsonet_alloc_mem");
+	pr_log("MB - zsonet_open - zsonet_alloc_mem");
 	rc = zsonet_alloc_mem(zp);
 	if (rc)
 		goto open_err;
 
-	pr_err("MB - zsonet_open - zsonet_request_irq");
+	pr_log("MB - zsonet_open - zsonet_request_irq");
 	rc = zsonet_request_irq(zp);
 	if (rc)
 		goto open_err;
 
-	pr_err("MB - zsonet_open - zsonet_prepare_device");
+	pr_log("MB - zsonet_open - zsonet_prepare_device");
 	zsonet_prepare_device(zp);
-	pr_err("MB - zsonet_open - netif_carrier_on");
+	pr_log("MB - zsonet_open - netif_carrier_on");
 	netif_carrier_on(dev);
 
 	netif_start_queue(dev);
 
-	pr_err("MB - zsonet_open - open");
+	pr_log("MB - zsonet_open - open");
 	return 0;
 open_err:
-	pr_err("MB - zsonet_open - zsonet_free_irq");
+	pr_log("MB - zsonet_open - zsonet_free_irq");
 	zsonet_free_irq(zp);
-	pr_err("MB - zsonet_open - zsonet_free_mem");
+	pr_log("MB - zsonet_open - zsonet_free_mem");
 	zsonet_free_mem(zp);
 	return rc;
 }
@@ -556,14 +541,14 @@ zsonet_close(struct net_device *dev){
 
 	struct zsonet *zp = netdev_priv(dev);
 
-	pr_err("MB - zsonet_close - netif_carrier_of");
+	pr_log("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
-	pr_err("MB - zsonet_close - napi_disable");
+	pr_log("MB - zsonet_close - napi_disable");
 	napi_disable(&zp->napi);
 
-	pr_err("MB - zsonet_close - zsonet_free_irq");
+	pr_log("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
-	pr_err("MB - zsonet_close - zsonet_free_mem");
+	pr_log("MB - zsonet_close - zsonet_free_mem");
 	zsonet_free_mem(zp);
 
 	return 0;
@@ -578,7 +563,7 @@ static inline void update_tx_stats(unsigned int size) {
 static netdev_tx_t
 zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	pr_err("MB - zsonet_start_xmit ");
+	pr_log("MB - zsonet_start_xmit ");
 
 	struct zsonet       *zp;
 	/* struct netdev_queue *txq; */
@@ -593,7 +578,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	if (unlikely(len > TX_BUFF_SIZE)) {
 		zp->dev->stats.tx_dropped++;
-		pr_err("MB - zsonet_start_xmit - drop of packet because of exceeding length");
+		pr_log("MB - zsonet_start_xmit - drop of packet because of exceeding length");
 		goto free_skb;
 	}
 
@@ -601,7 +586,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	pos = zp->tx_buffer_index;
 	offset = ZSONET_REG_TX_STATUS_0 + pos * 4;
-	pr_err("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
+	pr_log("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
 	
 	if (zp->buffer_blk_in_use[pos]) {
 		/* if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) { */
@@ -609,7 +594,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		/* 	zp->buffer_blk_in_use[pos] = 0; */
 		/* 	tx_buf = zp->buffer_blk[pos]; */
 		/* } else { */
-		pr_err("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos);
+		pr_log("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos);
 			netif_tx_stop_all_queues(dev);
 		/* } */
 	} else  {
@@ -623,14 +608,14 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_unlock_irq(&zp->tx_lock);
 
 	if (!tx_buf) {
-		pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
+		pr_log("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
 		return NETDEV_TX_BUSY;
 	}
 	
-	pr_err("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
+	pr_log("MB - zsonet_start_xmit - skb_copy_and_csum_dev ");
 	if (len < MIN_ETHERNET_PACKET_SIZE) {
 		memset(tx_buf, 0, ETH_ZLEN);
-		pr_err("MB - zsonet_start_smit - packet smaller than ethernet");
+		pr_log("MB - zsonet_start_smit - packet smaller than ethernet");
 		
 	}
 	skb_copy_and_csum_dev(skb, tx_buf);
@@ -642,8 +627,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	wmb();
 	len = max(len, (unsigned int) ETH_ZLEN);
 	ZSONET_WRL(zp, offset, (len << 16));
-	/* pr_err("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16)); */
-	/* pr_err("MB - zsonet_start_xmit - buffer "); */
+	/* pr_log("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16)); */
+	/* pr_log("MB - zsonet_start_xmit - buffer "); */
 	/* char *log_buf = tx_buf; */
 	/* log_buffer(log_buf, len); */
 	
@@ -653,14 +638,14 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* 	spin_lock_irq(&zp->lock); */
 	/* 	u32 x; */
 	/* 	if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) { */
-	/* 		pr_err("MB - zsonet_start_xmit - returning TX mask"); */
+	/* 		pr_log("MB - zsonet_start_xmit - returning TX mask"); */
 	/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_INTR_TX_OK); */
 	/* 	} */
 	/* 	spin_unlock_irq(&zp->lock); */
 	/* } */
 	
 free_skb:
-	pr_err("MB - zsonet_start_xmit - kfree");
+	pr_log("MB - zsonet_start_xmit - kfree");
 	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
@@ -678,22 +663,22 @@ zsonet_set_mac(struct zsonet *zp)
 {
 	for (int i = 0, offset = ZSONET_REG_MAC_0; i < 6; ++i, offset += sizeof(u8)) {
 		zp->mac_addr[i] = readb(zp->regview + offset);
-		pr_err("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
+		pr_log("MB - zsonet_set_mac i: %d, mac_addr: %d", i, (int) zp->mac_addr[i]);
 	}
 }
 
 static void ping_dma_mask(struct device *dev) {
 	if (dma_set_mask(dev, DMA_BIT_MASK(64)) == 0) {
-		pr_err("MB - ping_dma_mask - dma_set_mask 64 available");
+		pr_log("MB - ping_dma_mask - dma_set_mask 64 available");
 	}
 	if (dma_set_mask(dev, DMA_BIT_MASK(32)) == 0) {
-		pr_err("MB - ping_dma_mask - dma_set_mask 32 available");
+		pr_log("MB - ping_dma_mask - dma_set_mask 32 available");
 	}
 	if (dma_set_coherent_mask(dev, DMA_BIT_MASK(64)) == 0) {
-		pr_err("MB - ping_dma_mask - dma_set_coherent_mask 64 available");
+		pr_log("MB - ping_dma_mask - dma_set_coherent_mask 64 available");
 	}
 	if (dma_set_coherent_mask(dev, DMA_BIT_MASK(32)) == 0) {
-		pr_err("MB - ping_dma_mask - dma_set_coherent_mask 32 available");
+		pr_log("MB - ping_dma_mask - dma_set_coherent_mask 32 available");
 	}
 }
 
@@ -708,21 +693,21 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 	SET_NETDEV_DEV(dev, &pdev->dev);
 	zp = netdev_priv(dev);
 	
-	pr_err("MB - zsonet_init_board - enable_device");
+	pr_log("MB - zsonet_init_board - enable_device");
 	rc = pci_enable_device(pdev);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot enable PCI device, aborting\n");
 		goto err_out;
 	}
 	
-	pr_err("MB - zsonet_init_board - request regions");
+	pr_log("MB - zsonet_init_board - request regions");
 	rc = pci_request_regions(pdev, DRV_MODULE_NAME);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot obtain PCI resources, aborting\n");
 		goto err_out_disable;
 	}
 	
-	pr_err("MB - zsonet_init_board - resource flags");
+	pr_log("MB - zsonet_init_board - resource flags");
 	if (!(pci_resource_flags(pdev, 0) & IORESOURCE_MEM)) {
 		dev_err(&pdev->dev,
 			"Cannot find PCI device base address, aborting\n");
@@ -730,13 +715,13 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_release;
 	}
 
-	pr_err("MB - zsonet_init_board - set master");
+	pr_log("MB - zsonet_init_board - set master");
 	pci_set_master(pdev);
 
 	zp->pdev = pdev;
 	zp->dev = dev;
 	
-	pr_err("MB - zsonet_init_board - iomap");
+	pr_log("MB - zsonet_init_board - iomap");
 	zp->regview = pci_iomap(pdev, 0, REG_SIZE);
 	if (!zp->regview) {
 		dev_err(&pdev->dev, "Cannot map register space, aborting\n");
@@ -753,21 +738,21 @@ zsonet_init_board(struct pci_dev *pdev, struct net_device *dev)
 		goto err_out_unmap;
 	}
 	
-	pr_err("MB - zsonet_init_board - zsonet_set_mac");
+	pr_log("MB - zsonet_init_board - zsonet_set_mac");
 	zsonet_set_mac(zp);
 
-	pr_err("MB - zsonet_init_board - return 0");
+	pr_log("MB - zsonet_init_board - return 0");
 	return 0;
 	
 err_out_unmap:
-	pr_err("MB - zsonet_init_board - unmap");
+	pr_log("MB - zsonet_init_board - unmap");
 	pci_iounmap(pdev, zp->regview);
 	zp->regview = NULL;
 err_out_release:
-	pr_err("MB - zsonet_init_board - release_regions");
+	pr_log("MB - zsonet_init_board - release_regions");
 	pci_release_regions(pdev);
 err_out_disable:
-	pr_err("MB - zsonet_init_board - disable_device");
+	pr_log("MB - zsonet_init_board - disable_device");
 	pci_disable_device(pdev);
 err_out:
 	return rc;
@@ -795,14 +780,14 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	dev->netdev_ops = &zsonet_netdev_ops;
 	netif_napi_add(dev, &zp->napi, zsonet_poll);
 
-	pr_err("MB - zso_init_one - pci_set_drvdata\n");
+	pr_log("MB - zso_init_one - pci_set_drvdata\n");
 	pci_set_drvdata(pdev, dev);
 
-	pr_err("MB - zso_init_one - eth_hw_adddr_set\n");
+	pr_log("MB - zso_init_one - eth_hw_adddr_set\n");
 	eth_hw_addr_set(dev, zp->mac_addr);
 
 
-	pr_err("MB - zso_init_one features %lld", dev->features);
+	pr_log("MB - zso_init_one features %lld", dev->features);
 	
 	/* dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_SG | */
 	/* 	NETIF_F_TSO | NETIF_F_TSO_ECN | */
@@ -814,12 +799,12 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	dev->min_mtu = MIN_ETHERNET_PACKET_SIZE;
 	dev->max_mtu = MAX_ETHERNET_JUMBO_PACKET_SIZE;
 	
-	pr_err("MB - zso_init_one - spin_lock_init\n");
+	pr_log("MB - zso_init_one - spin_lock_init\n");
 	spin_lock_init(&zp->lock);
 	spin_lock_init(&zp->rx_lock);
 	spin_lock_init(&zp->tx_lock);
 
-	pr_err("MB - zso_init_one - register_netdev\n");
+	pr_log("MB - zso_init_one - register_netdev\n");
 	if ((rc = register_netdev(dev))) {
 		dev_err(&pdev->dev, "Cannot register net device\n");
 		goto error;
@@ -828,12 +813,12 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	netdev_info(dev, "MB - zso_init_one - success");
 	return 0;
 error:
-	pr_err("MB - zso_init_one - error");
+	pr_log("MB - zso_init_one - error");
 	pci_iounmap(pdev, zp->regview);
 	zp->regview = NULL;
-	pr_err("MB - zso_init_one - release");
+	pr_log("MB - zso_init_one - release");
 	pci_release_regions(pdev);
-	pr_err("MB - zso_init_one - disable");
+	pr_log("MB - zso_init_one - disable");
 	pci_disable_device(pdev);
 err_free:
 	/* zsonet_free_statts_blk(dev); */
@@ -844,29 +829,29 @@ err_free:
 static void
 zsonet_remove_one(struct pci_dev *pdev)
 {
-	pr_err("MB - zso_remove_one - get_drvdata");
+	pr_log("MB - zso_remove_one - get_drvdata");
 	struct net_device *dev = pci_get_drvdata(pdev);
 	if (dev == 0) {
-		pr_err("MB - zso_remove_one - drvdata is NULL");
+		pr_log("MB - zso_remove_one - drvdata is NULL");
 	} else {
-		pr_err("MB - zso_remove_one - dev %p dereference", dev);
+		pr_log("MB - zso_remove_one - dev %p dereference", dev);
 	}
 	struct zsonet *zp = netdev_priv(dev);
 
-	pr_err("MB - zso_remove_one - unregister");
+	pr_log("MB - zso_remove_one - unregister");
 	unregister_netdev(dev);
 	
 
-	pr_err("MB - zso_remove_one - iounmap");
+	pr_log("MB - zso_remove_one - iounmap");
 	pci_iounmap(pdev, zp->regview);
 
-	pr_err("MB - zso_remove_one - free_net_dev");
+	pr_log("MB - zso_remove_one - free_net_dev");
 	free_netdev(dev);
 
-	pr_err("MB - zso_remove_one - disable");
+	pr_log("MB - zso_remove_one - disable");
 	pci_disable_device(pdev);
 	
-	pr_err("MB - zso_remove_one - release");
+	pr_log("MB - zso_remove_one - release");
 	pci_release_regions(pdev);
 }
 

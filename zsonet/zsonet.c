@@ -14,8 +14,7 @@
 
 #include "zsonet.h"
 #include "linux/byteorder/generic.h"
-#include "linux/if_ether.h"
-#include "linux/socket.h"
+
 #include "net/net_debug.h"
 
 #include <linux/spinlock.h>

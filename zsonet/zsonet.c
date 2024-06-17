@@ -259,8 +259,6 @@ static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
 			zp->tx_stats.bytes   +=  zp->buffer_blk_in_use[i];
 			zp->buffer_blk_in_use[i] = 0;
 			zp->pending_writes--;
-		} else {
-			pr_log("MB - zsonet_tx_finish - empty_bulk: %d", i);
 		}
 	}
 }
@@ -276,7 +274,6 @@ zsonet_interrupt(int irq, void *dev_instance)
 	struct zsonet *zp;
 	struct net_device *dev = dev_instance;
 	unsigned int status;
-	/* unsigned int mask = ZSONET_INTR_TX_OK; */
 	
 	zp = netdev_priv(dev);
 

@@ -76,7 +76,6 @@ struct zsonet {
 	
 	u8			mac_addr[8];
 	u8                      irq_requested;
-	/* struct napi_struct	napi; */
 	
 	struct zsonet_stats     rx_stats;
 	struct zsonet_stats     tx_stats;
@@ -218,7 +217,7 @@ static void zsonet_update_rx_err(struct zsonet *zp) {
 	
 }
 
-static int zsonet_rx_poll(struct zsonet *zp, int budget)
+static int zsonet_rx_read_many(struct zsonet *zp, int budget)
 {
 	int work_done = 0;
 	if (!budget) return 0;
@@ -241,14 +240,6 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 
 	return work_done;
 }
-
-/* static int zsonet_poll(struct napi_struct *napi, int budget) { */
-/* 	struct zsonet *zp = container_of(napi, struct zsonet, napi); */
-/* 	int res = 0; */
-
-/* 	res = zsonet_rx_poll(zp, budget); */
-/* 	return res; */
-/* } */
 
 
 static void zsonet_tx_finish(struct zsonet *zp, unsigned int i) {
@@ -318,21 +309,13 @@ zsonet_interrupt(int irq, void *dev_instance)
 	if (has_data || status & ZSONET_INTR_RX_OK) {
 	        pr_log("MB - zsonet_interrupt - rx_lock ");
 		unsigned int budget = 0xf;
-		unsigned int work = zsonet_rx_poll(zp, budget);
+		unsigned int work = zsonet_rx_read_many(zp, budget);
 		if (work == budget) {
 		  spin_lock(&zp->lock);
 		  ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ~(ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK));
 		  spin_unlock(&zp->lock);
 		}
 	}
-
-	/* spin_lock(&zp->lock); */
-
-	/* pr_log("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status, */
-	/* ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS), ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)); */
-	/* spin_unlock(&zp->lock); */
-
-
 
 	return IRQ_HANDLED;
 }
@@ -464,11 +447,6 @@ zsonet_open(struct net_device *dev)
 	pr_log("MB - zsonet_open - netif_carrier_off");
 	netif_carrier_off(dev);
 
-	/* pr_log("MB - zsonet_open - zsonet_init_napi"); */
-	/* zsonet_init_napi(zp); */
-	/* pr_log("MB - zsonet_open - zsonet_napi_enable"); */
-	/* napi_enable(&zp->napi); */
-
 	pr_log("MB - zsonet_open - zsonet_alloc_mem");
 	rc = zsonet_alloc_mem(zp);
 	if (rc)
@@ -503,8 +481,6 @@ zsonet_close(struct net_device *dev){
 
 	pr_log("MB - zsonet_close - netif_carrier_of");
 	netif_carrier_off(dev);
-	/* pr_log("MB - zsonet_close - napi_disable"); */
-	/* napi_disable(&zp->napi); */
 
 	pr_log("MB - zsonet_close - zsonet_free_irq");
 	zsonet_free_irq(zp);
@@ -528,7 +504,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	pr_log("MB - zsonet_start_xmit ");
 
 	struct zsonet       *zp;
-	/* struct netdev_queue *txq; */
+
 	void *               tx_buf = NULL;
 	int pos;
 	unsigned int         len;
@@ -552,14 +528,8 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	pr_log("MB - zsonet_start_xmit - within spin_lock tx_pos %d", pos);
 	
 	if (zp->buffer_blk_in_use[pos]) {
-		/* if(TX_STATUS_I(zp, pos) & ZSONET_TX_STATUS_TX_FINISHED) { */
-		/* 	update_tx_stats(zp->buffer_blk_in_use[pos]); */
-		/* 	zp->buffer_blk_in_use[pos] = 0; */
-		/* 	tx_buf = zp->buffer_blk[pos]; */
-		/* } else { */
 		pr_log("MB - zsonet_start_xmit - stopping_queue - queue full for pos - %d", pos);
 			netif_tx_stop_all_queues(dev);
-		/* } */
 	} else  {
 		tx_buf = zp->buffer_blk[pos];
 	}
@@ -590,22 +560,7 @@ zsonet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	wmb();
 	len = max(len, (unsigned int) ETH_ZLEN);
 	ZSONET_WRL(zp, offset, (len << 16));
-	/* pr_log("MB - zsonet_start_xmit - posting message of len: %d as value %d\n", len, (len << 16)); */
-	/* pr_log("MB - zsonet_start_xmit - buffer "); */
-	/* char *log_buf = tx_buf; */
-	/* log_buffer(log_buf, len); */
-	
 	spin_unlock_irqrestore(&zp->tx_lock, flags);
-
-	/* { */
-	/* 	spin_lock_irq(&zp->lock); */
-	/* 	u32 x; */
-	/* 	if (!((x = ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)) & ZSONET_INTR_TX_OK)) { */
-	/* 		pr_log("MB - zsonet_start_xmit - returning TX mask"); */
-	/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, x & ZSONET_INTR_TX_OK); */
-	/* 	} */
-	/* 	spin_unlock_irq(&zp->lock); */
-	/* } */
 	
 free_skb:
 	pr_log("MB - zsonet_start_xmit - kfree");
@@ -752,13 +707,7 @@ zso_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	pr_log("MB - zso_init_one features %lld", dev->features);
 	
-	/* dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_SG | */
-	/* 	NETIF_F_TSO | NETIF_F_TSO_ECN | */
-	/* 	NETIF_F_RXHASH | NETIF_F_RXCSUM; */
 
-	/* dev->vlan_features = dev->hw_features; */
-	/* dev->features |= dev->hw_features; */
-	
 	dev->min_mtu = MIN_ETHERNET_PACKET_SIZE;
 	dev->max_mtu = MAX_ETHERNET_JUMBO_PACKET_SIZE;
 	
@@ -784,7 +733,7 @@ error:
 	pr_log("MB - zso_init_one - disable");
 	pci_disable_device(pdev);
 err_free:
-	/* zsonet_free_statts_blk(dev); */
+
 	free_netdev(dev);
   return rc;
 }

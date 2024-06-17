@@ -221,12 +221,11 @@ static void zsonet_update_rx_err(struct zsonet *zp) {
 static int zsonet_rx_poll(struct zsonet *zp, int budget)
 {
 	int work_done = 0;
-	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
-
-
 	if (!budget) return 0;
 
 	spin_lock(&zp->rx_lock);
+	int write_position = ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET);
+	rmb();
 	pr_log("MB - zsonet_rx_poll, rx_read_pos %d, rx_write_pos %d",
 			  (u32) zp->rx_buffer_position, write_position);
 	while (zp->rx_buffer_position != write_position) {
@@ -237,19 +236,7 @@ static int zsonet_rx_poll(struct zsonet *zp, int budget)
 	}
 	zsonet_update_rx_err(zp);
 	
-	
 	ZSONET_WRL(zp, ZSONET_REG_RX_BUF_READ_OFFSET, (u32) zp->rx_buffer_position);
-	
-	/* if (work_done < budget) { */
-	/* 	unsigned long flags; */
-	/* 	spin_lock_irqsave(&zp->lock, flags); */
-	/* 	if (napi_complete_done(&zp->napi, work_done)) { */
-	/* 		pr_log("MB - zsonet_rx_poll - rearming interrupts"); */
-	/* 		ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK); */
-	/* 	} */
-	/* 	spin_unlock_irqrestore(&zp->lock, flags); */
-	/* } */
-
 	spin_unlock(&zp->rx_lock);
 
 	return work_done;
@@ -304,11 +291,9 @@ zsonet_interrupt(int irq, void *dev_instance)
 
 	spin_lock(&zp->lock);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
-	wmb(); rmb();
+	wmb();
+        rmb();
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
-	pr_log("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status,
-	       ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS), ZSONET_RDL(zp, ZSONET_REG_INTR_MASK));
-
 	spin_unlock(&zp->lock);
 	
 	pr_log("MB - zsonet_interrupt - Status %d", status);
@@ -339,6 +324,14 @@ zsonet_interrupt(int irq, void *dev_instance)
 		/* } */
 		/* spin_unlock(&zp->lock); */
 	}
+
+	/* spin_lock(&zp->lock); */
+
+	/* pr_log("MB - zsonet_interrupt status = %d, new_status = %d, mask = %d", status, */
+	/* ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS), ZSONET_RDL(zp, ZSONET_REG_INTR_MASK)); */
+	/* spin_unlock(&zp->lock); */
+
+
 
 	return IRQ_HANDLED;
 }

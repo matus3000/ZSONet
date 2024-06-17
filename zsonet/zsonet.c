@@ -291,9 +291,9 @@ zsonet_interrupt(int irq, void *dev_instance)
 
 	spin_lock(&zp->lock);
 	status = ZSONET_RDL(zp, ZSONET_REG_INTR_STATUS);
-	wmb();
         rmb();
 	ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK);
+	wmb();
 	spin_unlock(&zp->lock);
 	
 	pr_log("MB - zsonet_interrupt - Status %d", status);
@@ -313,7 +313,9 @@ zsonet_interrupt(int irq, void *dev_instance)
 	pr_log("MB - zsonet_interrupt RX_WRITE_POS = %d RX_BUFF_SIZE %d",
 	       ZSONET_RDL(zp, ZSONET_REG_RX_BUF_WRITE_OFFSET), ZSONET_RDL(zp, ZSONET_REG_RX_BUF_SIZE));
 
-	if (status & ZSONET_INTR_RX_OK) {
+	unsigned int has_data = ZSONET_RDL(zp, ZSONET_REG_RX_STATUS) & ZSONET_RX_STATUS_RX_HAS_DATA;
+	
+	if (has_data || status & ZSONET_INTR_RX_OK) {
 	        pr_log("MB - zsonet_interrupt - rx_lock ");
 		zsonet_rx_poll(zp, 0xffff);
 		/* spin_lock(&zp->lock); */

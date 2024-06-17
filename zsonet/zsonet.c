@@ -204,7 +204,7 @@ static int zsonet_read_one(struct zsonet *zp) {
 	skb_put(skb, data_len);
 	skb->protocol = eth_type_trans(skb, zp->dev);
 
-        netif_receive_skb(skb);
+        netif_rx(skb);
 
 	zp->rx_stats.packets += 1;
 	zp->rx_stats.bytes += data_len + 1;//<Nagłówek też wliczamy	

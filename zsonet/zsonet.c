@@ -317,14 +317,13 @@ zsonet_interrupt(int irq, void *dev_instance)
 	
 	if (has_data || status & ZSONET_INTR_RX_OK) {
 	        pr_log("MB - zsonet_interrupt - rx_lock ");
-		zsonet_rx_poll(zp, 0xffff);
-		/* spin_lock(&zp->lock); */
-		/* if (napi_schedule_prep(&zp->napi)) { */
-		/* 	pr_log("MB - zsonet_interrupt -Disarming interrupt"); */
-		/* 	ZSONET_WRL(zp, ZSONET_REG_INTR_MASK, ZSONET_INTR_TX_OK); */
-		/* 	__napi_schedule(&zp->napi); */
-		/* } */
-		/* spin_unlock(&zp->lock); */
+		unsigned int budget = 0xf;
+		unsigned int work = zsonet_rx_poll(zp, budget);
+		if (work == budget) {
+		  spin_lock(&zp->lock);
+		  ZSONET_WRL(zp, ZSONET_REG_INTR_STATUS, ~(ZSONET_INTR_TX_OK | ZSONET_INTR_RX_OK));
+		  spin_unlock(&zp->lock);
+		}
 	}
 
 	/* spin_lock(&zp->lock); */
